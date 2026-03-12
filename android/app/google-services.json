@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1002065376356",
+    "project_id": "team-trackify-5a312",
+    "storage_bucket": "team-trackify-5a312.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1002065376356:android:e481f5475b747de2861b71",
+        "android_client_info": {
+          "package_name": "com.whc_tracking"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0KJKzkwcNziVdmGc0HbHjbhbYiqZZYv4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+// apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle") 
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -59,6 +60,23 @@ react {
  */
 def enableProguardInReleaseBuilds = false
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader ->
+        localProperties.load(reader)
+    }
+}
+def googleMapsApiKey = localProperties.getProperty("GOOGLE_MAPS_API_KEY", "").trim()
+if (!googleMapsApiKey) {
+    def exampleFile = rootProject.file("local.properties.example")
+    if (exampleFile.exists()) {
+        def example = new Properties()
+        exampleFile.withReader("UTF-8") { reader -> example.load(reader) }
+        googleMapsApiKey = example.getProperty("GOOGLE_MAPS_API_KEY", "").trim()
+    }
+}
+
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
  *
@@ -84,6 +102,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: googleMapsApiKey]
     }
     signingConfigs {
         debug {
@@ -110,6 +129,16 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    // implementation project(':react-native-vector-icons')
+    implementation(platform("com.google.firebase:firebase-bom:33.15.0"))
+    // Existing dependencies
+    implementation("com.google.firebase:firebase-analytics")
+
+    // Add this line for Firebase Cloud Messaging
+    implementation("com.google.firebase:firebase-messaging")
+    // Google Play Services Location for fused location provider
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.facebook.react:react-android")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
@@ -117,3 +146,5 @@ dependencies {
         implementation jscFlavor
     }
 }
+// apply from: "../../node_modules/react-native-vector-icons/fonts.gradle" 
+apply plugin: 'com.google.gms.google-services'
