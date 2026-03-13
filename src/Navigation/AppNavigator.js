@@ -117,25 +117,25 @@ const TabNavigator = () => {
             tabBarInactiveTintColor: '#999999',
         }}>
             <Tab.Screen
-                name="Home"
-                component={Home}
+                name="LocationTrackingTab"
+                component={LocationTrackingScreen}
                 options={{
                     tabBarIcon: ({ color, size }) => (
-                        <Icon name="home" color={color} size={size} />
+                        <Icon name="navigate" color={color} size={size} />
                     ),
-                    title: "Home",
+                    title: "Location",
                     headerShown: false,
                 }}
             />
             <Tab.Screen
-                name="TabAttendance"
-                component={AttendenceTabPage}
+                name="TrackingHistoryTab"
+                component={TrackingHistoryScreen}
                 options={{
                     tabBarIcon: ({ color, size }) => (
-                        <Icon name="list" color={color} size={size} />
+                        <Icon name="time-outline" color={color} size={size} />
                     ),
                     headerShown: true,
-                    title: "Attendence",
+                    title: "Tracking History",
                     headerTitleAlign: "center",
                     headerTitleStyle: {
                         fontWeight: '600',

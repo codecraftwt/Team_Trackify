@@ -16,7 +16,7 @@ const SplashScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <SplashMessage message="Welcome to HRMS" />
+      <SplashMessage message="Team Trackify" />
     </View>
   );
 };

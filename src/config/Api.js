@@ -5,7 +5,8 @@ const Api = axios.create({
   baseURL:
     process.env.EXPO_PUBLIC_API_URL ||
     // "https://luckycrm-001-site1.ltempurl.com/",
-    "http://180.179.21.98:8082/",
+    // "http://180.179.21.98:8082/",
+    "https://trackingapp-backend-6ny6.onrender.com",
  
   headers: {
     "Content-Type": "application/json",

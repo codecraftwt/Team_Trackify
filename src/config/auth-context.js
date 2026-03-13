@@ -12,6 +12,7 @@ export const AuthProvider = ({ children }) => {
   const [userRole, setUserRole] = useState(null)
   const [userId, setUserId] = useState(null)
   const [companyId, setCompanyId] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
 
   useEffect(() => {
     loadPersistedAuthState()
@@ -23,12 +24,20 @@ export const AuthProvider = ({ children }) => {
       const storedUserId = await AsyncStorage.getItem("userId")
       const storedCompanyId = await AsyncStorage.getItem("companyId")
       const storedUserRole = await AsyncStorage.getItem("userRole")
+      const storedUserProfile = await AsyncStorage.getItem("userProfile")
 
       if (token && storedUserId && storedCompanyId && storedUserRole) {
         setIsAuthenticated(true)
         setUserId(storedUserId)
         setCompanyId(storedCompanyId)
         setUserRole(storedUserRole)
+        if (storedUserProfile) {
+          try {
+            setUserProfile(JSON.parse(storedUserProfile))
+          } catch {
+            setUserProfile(null)
+          }
+        }
       }
 
       // ✅ Load Punch Data
@@ -66,19 +75,21 @@ export const AuthProvider = ({ children }) => {
     console.log('AuthContext: Clearing auth data...');
     try {
       await AsyncStorage.multiRemove(["authToken", "userId", "companyId", "userRole",
-        "isBreakActive","breakStartTime","lastBreakType","isWorkActive","workStartTime","activeWorkReason"
+        "isBreakActive","breakStartTime","lastBreakType","isWorkActive","workStartTime","activeWorkReason",
+        "userProfile"
       ])
       setIsAuthenticated(false)
       setUserId(null)
       setCompanyId(null)
       setUserRole(null)
+      setUserProfile(null)
 
     } catch (error) {
       console.error("AuthContext: Error clearing auth data:", error)
     }
   }
 
-  const setAuthData = async (token, userId, companyId, role) => {
+  const setAuthData = async (token, userId, companyId, role, userData = null) => {
     console.log('AuthContext: Setting auth data programmatically...');
     await AsyncStorage.setItem('authToken', `Bearer ${token}`);
     await AsyncStorage.setItem('userId', userId.toString());
@@ -88,6 +99,10 @@ export const AuthProvider = ({ children }) => {
     setUserId(userId.toString());
     setCompanyId(companyId.toString());
     setUserRole(role);
+    if (userData) {
+      setUserProfile(userData);
+      await AsyncStorage.setItem('userProfile', JSON.stringify(userData));
+    }
   };
 
   return (
@@ -98,6 +113,7 @@ export const AuthProvider = ({ children }) => {
         userRole,
         userId,
         companyId,
+        userProfile,
         isPunchedIn,
         punchInTime,
         punchOutTime,

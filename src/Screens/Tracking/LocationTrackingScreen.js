@@ -386,6 +386,12 @@ const LocationTrackingScreen = () => {
         .sort((a, b) => a.timestamp - b.timestamp);
 
       setLocations(points);
+      console.log('Loaded session locations:', {
+        sessionId,
+        count: points.length,
+        first: points[0],
+        last: points[points.length - 1],
+      });
       const photoPoints = points.filter(p => p.photoUri || p.remark || p.amount);
       setPhotoEntries(photoPoints);
 
@@ -497,6 +503,8 @@ const LocationTrackingScreen = () => {
       isOnline: online,
     };
 
+    console.log('Sending location point:', payload);
+
     const result = await TrackingService.addLocationOfflineFirst(sessionId, payload, formData);
     if (result?.success) {
       lastPointRef.current = { latitude: location.latitude, longitude: location.longitude };
@@ -590,7 +598,10 @@ const LocationTrackingScreen = () => {
 
       const initialLocation = await getCurrentLocation();
       const started = await TrackingService.startSessionOfflineFirst();
+      console.log('Start tracking response:', started);
       const sessionId = started?.sessionId;
+      console.log("sessionId ----", sessionId);
+      
       if (!sessionId) {
         throw new Error('Failed to start tracking session');
       }
@@ -1113,7 +1124,8 @@ const LocationTrackingScreen = () => {
           {renderMapMarkers('main')}
         </MapView>
 
-        <View style={styles.gpsBadge}>
+        {/* GPS badge - commented out */}
+        {/* <View style={styles.gpsBadge}>
           <View
             style={[
               styles.gpsDot,
@@ -1141,10 +1153,11 @@ const LocationTrackingScreen = () => {
           onPress={() => setFullScreenMapVisible(true)}
         >
           <Icon name="expand" size={18} color="#374151" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
-      <Modal
+      {/* Full screen map modal - commented out */}
+      {/* <Modal
         visible={fullScreenMapVisible}
         animationType="slide"
         onRequestClose={() => setFullScreenMapVisible(false)}
@@ -1174,9 +1187,10 @@ const LocationTrackingScreen = () => {
             {renderMapMarkers('full')}
           </MapView>
         </View>
-      </Modal>
+      </Modal> */}
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+      {/* Card with icon, title, stats, refresh - commented out */}
+      {/* <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         <View style={styles.card}>
           <Icon
             name={isTracking ? 'map-marker' : 'map-o'}
@@ -1306,7 +1320,51 @@ const LocationTrackingScreen = () => {
           <Icon name="history" size={18} color="#438AFF" style={styles.btnIcon} />
           <Text style={styles.historyBtnText}>View Tracking History</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </ScrollView> */}
+
+      {/* Only map + Start/Stop + Add Photo (when tracking) */}
+      <View style={styles.controlsRow}>
+        <TouchableOpacity
+          style={[
+            styles.mainBtn,
+            styles.flexBtn,
+            isTracking ? styles.stopBtn : styles.startBtn,
+            (loading || uploadingPhoto) && styles.disabledBtn,
+          ]}
+          onPress={isTracking ? stopTracking : startTracking}
+          disabled={loading || uploadingPhoto}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Icon
+                name={isTracking ? 'stop' : 'play'}
+                size={18}
+                color="#fff"
+                style={styles.btnIcon}
+              />
+              <Text style={styles.mainBtnText}>
+                {isTracking ? 'Stop' : 'Start'}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+        {isTracking && (
+          <TouchableOpacity
+            style={[
+              styles.photoBtn,
+              styles.flexBtn,
+              (loading || uploadingPhoto) && styles.disabledBtn,
+            ]}
+            onPress={openAddPhoto}
+            disabled={loading || uploadingPhoto}
+          >
+            <Icon name="camera" size={18} color="#fff" style={styles.btnIcon} />
+            <Text style={styles.photoBtnText}>Add Photo</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <Modal
         visible={addPhotoModalVisible}
@@ -1373,8 +1431,18 @@ const LocationTrackingScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  mapWrap: { width, height: hp(32) },
+  mapWrap: { flex: 1, width },
   map: { width: '100%', height: '100%' },
+  controlsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: wp(4),
+    paddingVertical: hp(2),
+    gap: wp(3),
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  flexBtn: { flex: 1 },
   gpsBadge: {
     position: 'absolute',
     top: 10,

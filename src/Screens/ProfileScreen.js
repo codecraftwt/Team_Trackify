@@ -1,80 +1,66 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, Modal } from "react-native";
-import Icon from "react-native-vector-icons/FontAwesome5";
-import { launchCamera, launchImageLibrary } from "react-native-image-picker";
-import { widthPercentageToDP as wp, heightPercentageToDP as hp } from "react-native-responsive-screen";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "../config/auth-context";
-import BASE_URL from "../config/server";
-import RNFS from "react-native-fs";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  Modal,
+  SafeAreaView,
+  Dimensions,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome5';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../config/auth-context';
+import BASE_URL from '../config/server';
 import { CommonActions } from '@react-navigation/native';
-import ImageResizer from 'react-native-image-resizer';
 import ModalComponent from '../Component/ModalComponent';
 
-const decodeJWT = (token) => {
-  try {  
-    const payload = token.split(".")[1];
-    const decoded = JSON.parse(atob(payload));
-    return decoded;
-  } catch (e) {
-    console.log("JWT decode error", e);
-    return null;
-  }
-};
+const { width: w } = Dimensions.get('window');
+const f = (n) => wp(n * 1.2);
 
 const ProfileScreen = ({ navigation }) => {
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
-  const [profileImage, setProfileImage] = useState("");
-  const { clearAuthData } = useAuth();
+  const [profileImage, setProfileImage] = useState('');
+  const { clearAuthData, userProfile } = useAuth();
   const [profileData, setProfileData] = useState(null);
-  const [tempImage, setTempImage] = useState(null); // temporary selected image
-  const [showImageModal, setShowImageModal] = useState(false); // modal for save/cancel
+  const [tempImage, setTempImage] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchProfileData();
-  }, []);
-
-  const fetchProfileData = async () => {
-    try {
-      const token = await AsyncStorage.getItem("authToken");
-      if (!token) return Alert.alert("Error", "Token not found");
-      const decoded = decodeJWT(token);
-      const employeeId = decoded?.EmployeeId;
-      if (!employeeId) return Alert.alert("Error", "Employee ID missing from token");
-
-      const response = await fetch(`${BASE_URL}/Employee/GetEmpProfile?employeeId=${employeeId}`, {
-        headers: { Authorization: token },
-      });
-
-      if (!response.ok) throw new Error("Failed to fetch profile data");
-      const data = await response.json();
-      setProfileData(data);
-
-      if (data.photoImage) {
-        let base64 = data.photoImage.trim().replace(/^"(.*)"$/, "$1");
-        if (!base64.startsWith("data:image")) base64 = `data:image/jpeg;base64,${base64}`;
-        setProfileImage(base64);
-      } else setProfileImage(null);
-    } catch (error) {
-      console.error("Profile Fetch Error:", error);
-      Alert.alert("Error", "Failed to load profile.");
+    if (userProfile) {
+      setProfileData(userProfile);
     }
-  };
+  }, [userProfile]);
+
+  const toggleImageModal = () => setShowImageModal((prev) => !prev);
 
   const handleSelectImage = async (source) => {
     try {
-      const result = source === "camera"
-        ? await launchCamera({ mediaType: "photo", cameraType: "front", quality: 0.7, saveToPhotos: true })
-        : await launchImageLibrary({ mediaType: "photo", quality: 0.7 });
+      const result =
+        source === 'camera'
+          ? await launchCamera({
+              mediaType: 'photo',
+              cameraType: 'front',
+              quality: 0.7,
+              saveToPhotos: true,
+            })
+          : await launchImageLibrary({ mediaType: 'photo', quality: 0.7 });
 
       const uri = result.assets?.[0]?.uri;
       if (uri) {
         setTempImage(uri);
-        setShowImageModal(true); // show save/cancel modal
       }
     } catch (error) {
-      console.error("Image pick error:", error);
+      console.error('Image pick error:', error);
     }
   };
 
@@ -82,27 +68,12 @@ const ProfileScreen = ({ navigation }) => {
     if (!tempImage) return;
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem("authToken");
-      const decoded = decodeJWT(token);
-      const empId = decoded?.EmployeeId;
-
-      const resized = await ImageResizer.createResizedImage(tempImage, 40, 40, 'JPEG', 70);
-      const base64Data = await RNFS.readFile(resized.uri, 'base64');
-
-      const response = await fetch(
-        `${BASE_URL}/Employee/UpdateEmpProfile?empId=${empId}&image=${encodeURIComponent(base64Data)}`,
-        { method: "POST", headers: { Authorization: token } }
-      );
-
-      if (!response.ok) throw new Error(await response.text() || "Upload failed");
-
-      setProfileImage(`data:image/jpeg;base64,${base64Data}`);
+      setProfileImage(tempImage);
       setTempImage(null);
-      setShowImageModal(false);
-      Alert.alert("Success", "Profile image updated!");
+      Alert.alert('Success', 'Profile image updated locally.');
     } catch (error) {
-      console.error("Upload Error:", error);
-      Alert.alert("Error", "Failed to update image.");
+      console.error('Upload Error:', error);
+      Alert.alert('Error', 'Failed to update image.');
     } finally {
       setLoading(false);
     }
@@ -114,124 +85,192 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handleEditProfileImage = () => {
-    Alert.alert(
-      "Edit Profile Image",
-      "Choose an option",
-      [
-        { text: "Take Photo", onPress: () => handleSelectImage("camera") },
-        { text: "Choose from Gallery", onPress: () => handleSelectImage("gallery") },
-        { text: "Cancel", style: "cancel" },
-      ],
-      { cancelable: true }
-    );
+    Alert.alert('Edit Profile Image', 'Choose an option', [
+      { text: 'Take Photo', onPress: () => handleSelectImage('camera') },
+      { text: 'Choose from Gallery', onPress: () => handleSelectImage('gallery') },
+      { text: 'Cancel', style: 'cancel' },
+    ], { cancelable: true });
   };
 
   const handleLogout = () => setLogoutModalVisible(true);
 
   const confirmLogout = async () => {
     try {
-      const punchInDate = await AsyncStorage.getItem("punchInDate");
-      const punchInTime = await AsyncStorage.getItem("punchInTime");
-      const punchOutTime = await AsyncStorage.getItem("punchOutTime");
+      const token = await AsyncStorage.getItem('authToken');
+
+      if (token) {
+        await fetch(`${BASE_URL}/api/users/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: token },
+        });
+      }
 
       await clearAuthData();
-      await AsyncStorage.removeItem("hasSeenWelcome");
-      if (punchInDate) await AsyncStorage.setItem("punchInDate", punchInDate);
-      if (punchInTime) await AsyncStorage.setItem("punchInTime", punchInTime);
-      if (punchOutTime) await AsyncStorage.setItem("punchOutTime", punchOutTime);
-
+      await AsyncStorage.removeItem('hasSeenWelcome');
       setLogoutModalVisible(false);
       navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Auth' }] }));
     } catch (error) {
-      console.error("Logout Error:", error);
-      Alert.alert("Logout Failed", "Something went wrong while logging out.");
+      console.error('Logout Error:', error);
+      Alert.alert('Logout Failed', 'Something went wrong while logging out.');
     }
   };
 
-  const menuItems = [
-    { title: "Personal Informations", icon: "info-circle", color: "#438aff", screen: "PersonalInfo" },
-    { title: "Bank Details", icon: "university", color: "#A30000", screen: "BankDetails" },
-    { title: "General Information", icon: "address-card", color: "#00B894", screen: "GeneralInfo" },
-    { title: "My Document", icon: "file-alt", color: "#A67CFF", screen: "MyDocument" },
-    { title: "Log Out", icon: "sign-out-alt", color: "#c6303e" },
-  ];
+  const userData = profileData || {};
+  const displayImage = tempImage || profileImage || userData?.avtar;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.profileImageWrapper}>
-        <Image
-          source={{ uri: tempImage ? tempImage : profileImage }}
-          style={styles.profileImage}
-        />
-        <TouchableOpacity style={styles.editIcon} onPress={handleEditProfileImage}>
-          <Icon name="pencil-alt" size={wp("4%")} color="#FFF" />
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.profileName}>{profileData?.fullName ?? "Loading..."}</Text>
-
-      <View style={styles.menuContainer}>
-        {menuItems.map((item, index) => (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={styles.header}>
           <TouchableOpacity
-            key={index}
-            style={styles.menuItem}
-            onPress={() => item.title === "Log Out" ? handleLogout() : item.screen && navigation.navigate(item.screen)}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: item.color }]}>
-              <Icon name={item.icon} size={wp("5%")} color="#FFF" />
-            </View>
-            <Text style={styles.menuText} allowFontScaling={false}>{item.title}</Text>
-            <Icon name="chevron-right" size={wp("4%")} color="#438aff" />
+            style={styles.editIconContainer}
+            onPress={() => setShowDropdown(!showDropdown)}>
+            <Ionicons name="settings-sharp" size={f(3)} color="#fff" />
           </TouchableOpacity>
-        ))}
-      </View>
 
-      {/* Image Save/Cancel Modal */}
-      <Modal
-        visible={showImageModal}
-        transparent
-        animationType="fade"
-        onRequestClose={handleCancelImage}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={{ fontSize: wp(4), marginBottom: hp(2) }}>Do you want to save this image?</Text>
-            <Image source={{ uri: tempImage }} style={{ width: wp(50), height: wp(50), borderRadius: wp(25), marginBottom: hp(2) }} />
-            <View style={{ flexDirection: "row" }}>
-             
+          {showDropdown && (
+            <>
               <TouchableOpacity
-                style={[styles.saveButton, { marginRight: wp(3) }, { backgroundColor: "#9ca3af" }]}
-                onPress={handleCancelImage}
-                disabled={loading}
-              >
-                <Text style={styles.saveButtonText}>Cancel</Text>
-              </TouchableOpacity>
+                style={styles.overlay}
+                activeOpacity={1}
+                onPress={() => setShowDropdown(false)}
+              />
+              <View style={styles.dropdownContent}>
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    handleEditProfileImage();
+                    setShowDropdown(false);
+                  }}>
+                  <Text style={styles.dropdownText}>Edit Profile</Text>
+                </TouchableOpacity>
+                {(userData?.role_id === 1 || userData?.role_id === 2) && (
+                  <TouchableOpacity
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      try {
+                        navigation.navigate('Complaint');
+                      } catch (_) {}
+                      setShowDropdown(false);
+                    }}>
+                    <Text style={styles.dropdownText}>Complaints</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
 
-               <TouchableOpacity
-                style={[styles.saveButton, { marginRight: wp(3) }]}
-                onPress={handleSaveImage}
-                disabled={loading}
-              >
-                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save</Text>}
-              </TouchableOpacity>
+          <TouchableOpacity onPress={toggleImageModal} style={styles.profileImageContainer}>
+            {displayImage ? (
+              <Image source={{ uri: displayImage }} style={styles.profileImage} />
+            ) : (
+              <View style={[styles.profileImage, styles.profileImagePlaceholder]}>
+                <Icon name="user" size={wp(12)} color="#3088C7" />
+              </View>
+            )}
+          </TouchableOpacity>
+          <Text style={styles.userName}>{userData?.name || 'User'}</Text>
+        </View>
+
+        <View style={styles.contentContainer}>
+          <View style={styles.infoCard}>
+            <View style={styles.infoItem}>
+              <Icon name="envelope" size={f(4)} color="#3088C7" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{userData?.email || 'Not Available'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.separator} />
+
+            <View style={styles.infoItem}>
+              <Icon name="phone" size={f(4)} color="#3088C7" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Mobile</Text>
+                <Text style={styles.infoValue}>{userData?.mobile_no || 'Not Available'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.separator} />
+
+            <View style={styles.infoItem}>
+              <Icon name="map-marker-alt" size={f(4)} color="#3088C7" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Address</Text>
+                <Text style={styles.infoValue}>{userData?.address || 'Not Available'}</Text>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
 
-      {/* Logout Modal */}
-      <ModalComponent
-        isVisible={logoutModalVisible}
-        onClose={() => setLogoutModalVisible(false)}
-        iconName="sign-out"
-        iconColor="#C6303E"
-        title="Do you really want to log out?"
-        content={<Text style={styles.logoutModalText}>Can remove HRMS data from the app.</Text>}
-        buttonText="Logout"
-        onConfirm={confirmLogout}
-        showCancel={true}
-      />
-    </ScrollView>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton} activeOpacity={0.85}>
+            <Icon name="sign-out-alt" size={f(2.5)} color="#fff" style={{ marginRight: wp(2) }} />
+            <Text style={styles.logoutText}>Log Out</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ModalComponent
+          isVisible={logoutModalVisible}
+          onClose={() => setLogoutModalVisible(false)}
+          iconName="sign-out-alt"
+          iconColor="#E94B3C"
+          title="Do you really want to log out?"
+          content={<Text style={styles.logoutModalText}>Are you sure you want to log out?</Text>}
+          buttonText="Logout"
+          onConfirm={confirmLogout}
+        />
+
+        <Modal
+          visible={showImageModal}
+          transparent
+          animationType="fade"
+          onRequestClose={toggleImageModal}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={toggleImageModal}>
+            <View style={styles.imageModalContent}>
+              {displayImage ? (
+                <Image source={{ uri: displayImage }} style={styles.fullImage} />
+              ) : (
+                <View style={[styles.fullImage, styles.profileImagePlaceholder]}>
+                  <Icon name="user" size={120} color="#3088C7" />
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {tempImage ? (
+          <Modal visible={true} transparent animationType="fade" onRequestClose={handleCancelImage}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.saveModalContent}>
+                <Text style={styles.saveModalTitle}>Do you want to save this image?</Text>
+                <Image source={{ uri: tempImage }} style={styles.saveModalPreview} />
+                <View style={styles.saveModalActions}>
+                  <TouchableOpacity
+                    style={[styles.saveButton, styles.cancelButton]}
+                    onPress={handleCancelImage}
+                    disabled={loading}>
+                    <Text style={styles.saveButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.saveButton, styles.confirmButton]}
+                    onPress={handleSaveImage}
+                    disabled={loading}>
+                    {loading ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Save</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -239,105 +278,196 @@ export default ProfileScreen;
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    alignItems: "center",
-    backgroundColor: "#f8f9fa",
-    paddingVertical: hp("5%"),
+    flex: 1,
+    backgroundColor: '#F2F7FB',
   },
-  profileImageWrapper: {
-    position: "relative",
-    width: wp("30%"),
-    height: wp("30%"),
-    marginBottom: hp("2%"),
-    justifyContent: "center",
-    alignItems: "center",
+  scrollContainer: {
+    flexGrow: 1,
+  },
+  header: {
+    backgroundColor: '#3088C7',
+    paddingVertical: hp(4.4),
+    alignItems: 'center',
+    borderBottomLeftRadius: hp(5),
+    borderBottomRightRadius: hp(5),
+    marginBottom: hp(5),
+    paddingTop: hp(5.4),
+  },
+  editIconContainer: {
+    position: 'absolute',
+    top: hp(6),
+    right: wp(5),
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    zIndex: 1,
+  },
+  dropdownContent: {
+    position: 'absolute',
+    top: hp(6.7),
+    right: wp(5),
+    backgroundColor: 'white',
+    borderRadius: hp(1),
+    padding: hp(2),
+    width: '70%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+    zIndex: 2,
+  },
+  dropdownItem: {
+    paddingVertical: hp(1.1),
+    paddingHorizontal: hp(2),
+  },
+  dropdownText: {
+    fontSize: wp(4.5),
+    color: '#1A1A1A',
+    fontWeight: '600',
+  },
+  profileImageContainer: {
+    marginBottom: wp(3),
   },
   profileImage: {
-    width: wp("35%"),
-    height: wp("35%"),
-    borderRadius: wp("20%"),
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
+    width: wp(25),
+    height: wp(25),
+    borderRadius: wp(25) / 2,
+    borderWidth: 3,
+    borderColor: '#F2F7FB',
+    marginTop: hp(1.2),
   },
-  editIcon: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    backgroundColor: "#438aff",
-    borderRadius: wp("5%"),
-    padding: wp("2%"),
-    justifyContent: "center",
-    alignItems: "center",
+  profileImagePlaceholder: {
+    backgroundColor: '#E8F0F7',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  profileName: {
-    fontSize: wp("5.5%"),
-    fontWeight: "bold",
-    marginVertical: hp("2%"),
-    color: "#438aff",
+  userName: {
+    fontSize: wp(5.5),
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.1)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+    textAlign: 'center',
   },
-  menuContainer: {
-    width: "90%",
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    paddingVertical: hp("1.5%"),
-    paddingHorizontal: wp("4%"),
-    marginVertical: hp("1%"),
-    borderRadius: wp("3%"),
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  iconContainer: {
-    width: wp("12%"),
-    height: wp("12%"),
-    borderRadius: wp("6%"),
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: wp("4%"),
-  },
-  menuText: {
-    flex: 1,
-    fontSize: wp("4.2%"),
-    color: "#374151",
-    fontWeight: "500",
-  },
-  modalContent: {
-    textAlign: "center",
-    fontSize: wp("3.5%"),
-    color: "#9ca3af",
-    marginBottom: hp("2%"),
-  },
-  saveButton: {
-    backgroundColor: "#438aff",
-    borderRadius: 6,
-    paddingVertical: hp(1),
+  contentContainer: {
     paddingHorizontal: wp(5),
-    alignItems: "center",
   },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: wp("3.5%"),
-    fontWeight: "600",
+  infoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: hp(3),
+    padding: wp(5),
+    marginBottom: wp(5),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: wp(3),
+  },
+  infoTextContainer: {
+    marginLeft: wp(4),
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: wp(3.8),
+    color: '#7D7D7D',
+    marginBottom: wp(1),
+  },
+  infoValue: {
+    fontSize: wp(4.2),
+    color: '#2D2D2D',
+    fontWeight: '500',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#E8E8E8',
+    marginVertical: wp(2),
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: hp(1.6),
+    paddingHorizontal: wp(2),
+    borderRadius: hp(2.4),
+    backgroundColor: '#E94B3C',
+    marginVertical: wp(7),
+    shadowColor: '#E94B3C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: wp(4),
+    fontWeight: '600',
+    letterSpacing: 1,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  logoutModalText: {   // renamed this one
-    textAlign: "center",
-    fontSize: wp("3.5%"),
-    color: "#9ca3af",
-    marginBottom: hp("2%"),
+  imageModalContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+    width: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
   },
-  modalContent: {
-     width: wp("80%"),
-  backgroundColor: "#fff",
-  borderRadius: 10,
-  padding: wp("5%"),
-  alignItems: "center",
+  fullImage: {
+    width: Math.min(w - 40, 380),
+    height: Math.min(w - 40, 380),
+    resizeMode: 'contain',
+  },
+  saveModalContent: {
+    width: wp(85),
+    backgroundColor: '#fff',
+    borderRadius: hp(2),
+    padding: wp(5),
+    alignItems: 'center',
+  },
+  saveModalTitle: {
+    fontSize: wp(4),
+    marginBottom: hp(2),
+    color: '#2D2D2D',
+  },
+  saveModalPreview: {
+    width: wp(50),
+    height: wp(50),
+    borderRadius: wp(25),
+    marginBottom: hp(2),
+  },
+  saveModalActions: {
+    flexDirection: 'row',
+    gap: wp(3),
+  },
+  saveButton: {
+    flex: 1,
+    paddingVertical: hp(1.5),
+    borderRadius: hp(1.5),
+    alignItems: 'center',
+  },
+  cancelButton: { backgroundColor: '#9ca3af' },
+  confirmButton: { backgroundColor: '#438aff' },
+  saveButtonText: { color: '#fff', fontSize: wp(3.8), fontWeight: '600' },
+  logoutModalText: {
+    textAlign: 'center',
+    fontSize: wp(3.8),
+    color: '#6B7280',
+    marginBottom: hp(1),
   },
 });
