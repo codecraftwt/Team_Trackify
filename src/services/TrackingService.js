@@ -278,6 +278,28 @@ export const getSessions = async (opts = {}) => {
   }
 };
 
+/**
+ * Fetches session history with date filtering (cursor-based pagination).
+ * API: GET /api/Tracking/GetUserSesionHistory
+ * @param {Object} opts - { limit?, cursor?, startDate?, endDate? }
+ * @returns {Promise<{sessions, nextCursor, limit, totalFetched}>}
+ */
+export const getSessionHistory = async (opts = {}) => {
+  const { limit = 20, cursor, startDate, endDate } = opts;
+  const params = new URLSearchParams();
+  if (limit) params.append('limit', Math.min(limit, 50));
+  if (cursor) params.append('cursor', cursor);
+  if (startDate) params.append('startDate', startDate);
+  if (endDate) params.append('endDate', endDate);
+  try {
+    const { data } = await getRequest(`${TRACKING_BASE}/GetUserSesionHistory?${params.toString()}`);
+    return data;
+  } catch (error) {
+    console.error('Failed to get session history:', error);
+    return { sessions: [], nextCursor: null, totalFetched: 0 };
+  }
+};
+
 export const deleteSession = async (sessionId) => {
   try {
     await deleteRequest(`${TRACKING_BASE}/${sessionId}`, {

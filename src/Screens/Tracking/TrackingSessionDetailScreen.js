@@ -11,6 +11,7 @@ import {
   Image,
   Modal,
   Platform,
+  FlatList,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import MapView, { Polyline, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -20,6 +21,7 @@ import * as TrackingService from '../../services/TrackingService';
 import { getAllLocationsForSession } from '../../services/OfflineLocationStore';
 import FancyAlert from '../FancyAlert';
 import Api from '../../config/Api';
+import CustomHeader from '../../Component/CustomHeader';
 
 const { width } = Dimensions.get('window');
 
@@ -380,6 +382,29 @@ const TrackingSessionDetailScreen = () => {
       (l?.amount != null && String(l.amount).trim() !== '')
   );
 
+  const handlePhotoCardPress = useCallback(
+    (loc) => {
+      if (!loc || !mapRef.current) return;
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      mapRef.current.animateCamera(
+        {
+          center: {
+            latitude: lat,
+            longitude: lng,
+          },
+          pitch: 0,
+          heading: 0,
+          zoom: 18,
+        },
+        { duration: 800 }
+      );
+    },
+    [mapRef]
+  );
+
   useEffect(() => {
     if (!detail || coordinates.length < 2 || !mapRef.current) return;
     mapRef.current.fitToCoordinates(coordinates, {
@@ -425,15 +450,20 @@ const TrackingSessionDetailScreen = () => {
       }
     : null;
 
+  const userName = detail?.userName || detail?.employeeName || '';
+
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {region && coordinates.length > 0 && (
-          <View style={styles.mapWrap}>
+      <CustomHeader
+        navigation={navigation}
+        title={userName || 'Session Detail'}
+        showBackButton={true}
+        showCrossButton={true}
+      />
+
+      {region && coordinates.length > 0 ? (
+        <View style={styles.content}>
+          <View style={styles.mapTopContainer}>
             <MapView
               ref={mapRef}
               style={styles.map}
@@ -441,9 +471,6 @@ const TrackingSessionDetailScreen = () => {
               initialRegion={region}
               mapType="standard"
               showsUserLocation={false}
-              onRegionChangeComplete={(r) => {
-                mapRegionRef.current = r;
-              }}
             >
               {polylineSegments.map((seg, idx) => (
                 <Polyline
@@ -455,156 +482,77 @@ const TrackingSessionDetailScreen = () => {
               ))}
               {renderRouteMarkers('main')}
             </MapView>
-            <TouchableOpacity
-              style={styles.mapFullScreenBtn}
-              onPress={() => {
-                mapRegionRef.current = region;
-                setFullScreenMapVisible(true);
-              }}
-            >
-              <Icon name="expand" size={18} color="#374151" />
-            </TouchableOpacity>
           </View>
-        )}
-        {region && coordinates.length > 0 && (
-          <Modal
-            visible={fullScreenMapVisible}
-            animationType="slide"
-            onRequestClose={() => setFullScreenMapVisible(false)}
-          >
-            <View style={styles.fullScreenMapContainer}>
-              <TouchableOpacity
-                style={styles.fullScreenCloseBtn}
-                onPress={() => setFullScreenMapVisible(false)}
-              >
-                <Icon name="times" size={24} color="#111" />
-              </TouchableOpacity>
-              <MapView
-                ref={fullScreenMapRef}
-                style={StyleSheet.absoluteFill}
-                provider={PROVIDER_GOOGLE}
-                initialRegion={mapRegionRef.current || region}
-                mapType="standard"
-                showsUserLocation={false}
-                onRegionChangeComplete={(r) => {
-                  mapRegionRef.current = r;
-                }}
-              >
-                {polylineSegments.map((seg, idx) => (
-                  <Polyline
-                    key={`polyline-full-${idx}`}
-                    coordinates={seg.coordinates}
-                    strokeColor={seg.isOnline ? '#438AFF' : '#DC2626'}
-                    strokeWidth={4}
-                  />
-                ))}
-                {renderRouteMarkers('full')}
-              </MapView>
-              <TouchableOpacity
-                style={styles.fullScreenMiniBtn}
-                onPress={() => setFullScreenMapVisible(false)}
-              >
-                <Icon name="compress" size={20} color="#374151" />
-              </TouchableOpacity>
-            </View>
-          </Modal>
-        )}
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Session</Text>
-          <View style={styles.row}>
-            <Text style={styles.label}>Start</Text>
-            <Text style={styles.value}>{formatDate(detail.startTime)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>End</Text>
-            <Text style={styles.value}>{formatDate(detail.endTime)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Duration</Text>
-            <Text style={styles.value}>{formatDuration(detail.duration)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Distance</Text>
-            <Text style={styles.value}>{formatDistance(detail.totalDistance)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.label}>Points</Text>
-            <Text style={styles.value}>{locations.length}</Text>
-          </View>
-        </View>
+          {locationsWithPhotoOrRemark.length > 0 && (
+            <View style={styles.photoCarouselSection}>
+              <FlatList
+                style={{ flex: 1 }}
+                horizontal
+                data={locationsWithPhotoOrRemark}
+                keyExtractor={(loc, index) => String(loc.id ?? index)}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoCarouselContent}
+                renderItem={({ item: loc }) => {
+                  const rawPhoto =
+                    loc.photoUrl ?? loc.photo ?? loc.photoPath ?? loc.photoUri;
+                  const photoUrl = buildPhotoUrl(rawPhoto);
+                  const remark =
+                    loc.remark != null ? String(loc.remark).trim() : '';
+                  const label = remark || 'Location Name';
 
-        {locationsWithPhotoOrRemark.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Photos & remarks</Text>
-            {locationsWithPhotoOrRemark.map((loc, index) => {
-              const rawPhoto = loc.photoUrl ?? loc.photo ?? loc.photoPath ?? loc.photoUri;
-              const photoUrl = buildPhotoUrl(rawPhoto);
-              const remark = loc.remark != null ? String(loc.remark).trim() : '';
-              const amount = loc.amount != null ? String(loc.amount).trim() : '';
-              const lat = loc.latitude != null ? Number(loc.latitude) : null;
-              const lng = loc.longitude != null ? Number(loc.longitude) : null;
-              return (
-                <View key={loc.id ?? index} style={styles.photoRow}>
-                  {photoUrl ? (
+                  return (
                     <TouchableOpacity
-                      onPress={() =>
-                        navigation.navigate('FullImageScreen', {
-                          imageUrl: photoUrl,
-                        })
-                      }
-                      style={styles.photoThumbWrap}
+                      style={styles.photoCard}
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        if (photoUrl) {
+                          handlePhotoCardPress(loc);
+                          navigation.navigate('FullImageScreen', {
+                            imageUrl: photoUrl,
+                          });
+                        }
+                      }}
                     >
-                      <Image
-                        source={{ uri: photoUrl }}
-                        style={styles.photoThumb}
-                        resizeMode="cover"
-                      />
+                      {photoUrl ? (
+                        <Image
+                          source={{ uri: photoUrl }}
+                          style={styles.photoCardImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.photoCardImage,
+                            styles.photoAvatarPlaceholder,
+                          ]}
+                        >
+                          <Icon name="image" size={24} color="#9ca3af" />
+                        </View>
+                      )}
+                      <View style={styles.photoCardInfo}>
+                        <Text style={styles.photoCardLabelTitle}>
+                          Location Name:{' '}
+                        </Text>
+                        <Text
+                          style={styles.photoCardLabelValue}
+                          numberOfLines={1}
+                        >
+                          {label}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
-                  ) : (
-                    <View style={[styles.photoThumbWrap, styles.photoPlaceholder]}>
-                      <Icon name="image" size={24} color="#9ca3af" />
-                    </View>
-                  )}
-                  <View style={styles.photoInfo}>
-                    {remark ? (
-                      <Text style={styles.photoRemark} numberOfLines={2}>
-                        {remark}
-                      </Text>
-                    ) : null}
-                    {amount ? (
-                      <Text style={styles.photoAmount}>Amount: {amount}</Text>
-                    ) : null}
-                    {lat != null && lng != null && (
-                      <Text style={styles.photoCoords}>
-                        {`Lat: ${lat.toFixed(6)}  Lng: ${lng.toFixed(6)}`}
-                      </Text>
-                    )}
-                    {!remark && !amount && lat == null && lng == null && (
-                      <Text style={styles.photoRemark}>—</Text>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={[styles.deleteBtn, deleting && styles.deleteBtnDisabled]}
-          onPress={handleDelete}
-          disabled={deleting}
-        >
-          {deleting ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <>
-              <Icon name="trash-o" size={18} color="#fff" style={styles.deleteIcon} />
-              <Text style={styles.deleteBtnText}>Delete session</Text>
-            </>
+                  );
+                }}
+              />
+            </View>
           )}
-        </TouchableOpacity>
-      </ScrollView>
+        </View>
+      ) : (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>No route data</Text>
+        </View>
+      )}
 
       <FancyAlert
         visible={alertVisible}
@@ -622,12 +570,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  scroll: {
+  content: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: wp(4),
-    paddingBottom: hp(4),
   },
   centered: {
     flex: 1,
@@ -654,14 +598,20 @@ const styles = StyleSheet.create({
     color: '#438AFF',
     fontWeight: '500',
   },
-  mapWrap: {
-    width: width - wp(8),
-    height: hp(28),
-    borderRadius: 12,
+  mapTopContainer: {
+    flex: 7,
+    width: '100%',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
     overflow: 'hidden',
-    marginTop: hp(2),
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    backgroundColor: '#e5e7eb',
+  },
+  mapWrap: {
+    width: width,
+    height: hp(40),
+    borderRadius: 0,
+    overflow: 'hidden',
+    marginTop: 0,
     position: 'relative',
   },
   map: {
@@ -803,6 +753,87 @@ const styles = StyleSheet.create({
     marginTop: hp(0.2),
     fontSize: wp(3.1),
     color: '#4b5563',
+  },
+  photoCarouselWrap: {
+    marginTop: hp(2),
+  },
+  photoCarouselContent: {
+    paddingHorizontal: wp(2),
+  },
+  photoCard: {
+    width: wp(60),
+    marginHorizontal: wp(1),
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  photoCardImage: {
+    width: '100%',
+    height: hp(18),
+    backgroundColor: '#f3f4f6',
+  },
+  photoCardInfo: {
+    paddingHorizontal: wp(3),
+    paddingVertical: hp(1),
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  photoCardLabelTitle: {
+    fontSize: wp(3.4),
+    fontWeight: '600',
+    color: '#111827',
+  },
+  photoCardLabelValue: {
+    fontSize: wp(3.4),
+    color: '#4b5563',
+  },
+  photoAvatarWrap: {
+    width: wp(18),
+    height: wp(18),
+    borderRadius: wp(9),
+    overflow: 'hidden',
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  photoAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoCardLabel: {
+    marginTop: hp(0.5),
+    fontSize: wp(3.1),
+    color: '#4b5563',
+    textAlign: 'center',
+  },
+  mapFullScreen: {
+    flex: 1,
+    position: 'relative',
+  },
+  photoCarouselSection: {
+    flex: 3,
+    paddingVertical: hp(0.5),
+  },
+  photoOverlay: {
+    position: 'absolute',
+    bottom: hp(1.5),
+    left: 0,
+    right: 0,
+    paddingHorizontal: wp(3),
   },
 });
 

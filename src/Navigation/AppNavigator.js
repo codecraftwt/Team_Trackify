@@ -324,7 +324,11 @@ const AuthenticatedStack = ({ route }) => {
             {/* Location Tracking */}
             <Stack.Screen name="LocationTracking" component={LocationTrackingScreen} options={(props) => commonScreenOptions({ ...props, title: 'Location Tracking' })} />
             <Stack.Screen name="TrackingHistory" component={TrackingHistoryScreen} options={(props) => commonScreenOptions({ ...props, title: 'Tracking History' })} />
-            <Stack.Screen name="TrackingSessionDetail" component={TrackingSessionDetailScreen} options={(props) => commonScreenOptions({ ...props, title: 'Session Detail' })} />
+            <Stack.Screen
+              name="TrackingSessionDetail"
+              component={TrackingSessionDetailScreen}
+              options={{ headerShown: false }}
+            />
         </Stack.Navigator>
         
     );
