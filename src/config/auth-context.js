@@ -105,6 +105,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUserProfile = async (userData) => {
+    if (userData) {
+      setUserProfile(userData);
+      await AsyncStorage.setItem('userProfile', JSON.stringify(userData));
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -123,6 +130,7 @@ export const AuthProvider = ({ children }) => {
         setPunchOutTime,
         clearAuthData,
         setAuthData,
+        updateUserProfile,
       }}
     >
       {children}

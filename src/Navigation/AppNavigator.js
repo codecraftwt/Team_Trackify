@@ -16,6 +16,7 @@ import PersonalInfo from '../Screens/ProfileScreen/PersonalInfo';
 import BankDetails from '../Screens/ProfileScreen/BankDetails';
 import Logout from '../Screens/ProfileScreen/Logout';
 import EditPersonalInfo from '../Screens/ProfileScreen/EditPersonalInfo';
+import EditProfileScreen from '../Screens/ProfileScreen/EditProfileScreen';
 import AddBankDetails from '../Screens/ProfileScreen/AddBankDetails';
 import EditBankDetails from '../Screens/ProfileScreen/EditBankDetails';
 import MyTickets from '../Screens/MyTickets';
@@ -264,6 +265,7 @@ const AuthenticatedStack = ({ route }) => {
 
             {/* All other screens that are accessible from authenticated routes */}
             <Stack.Screen name="Profile" component={ProfileScreen} />
+            <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ headerShown: false }} />
             <Stack.Screen
                 name="PersonalInfo"
                 component={PersonalInfo}

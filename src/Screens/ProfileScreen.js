@@ -139,7 +139,12 @@ const ProfileScreen = ({ navigation }) => {
                 <TouchableOpacity
                   style={styles.dropdownItem}
                   onPress={() => {
-                    handleEditProfileImage();
+                    const parent = navigation.getParent();
+                    if (parent?.navigate) {
+                      parent.navigate('EditProfile');
+                    } else {
+                      navigation.navigate('EditProfile');
+                    }
                     setShowDropdown(false);
                   }}>
                   <Text style={styles.dropdownText}>Edit Profile</Text>
