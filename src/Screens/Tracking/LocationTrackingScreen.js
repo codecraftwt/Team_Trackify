@@ -10,7 +10,6 @@ import {
   Modal,
   PermissionsAndroid,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -95,14 +94,6 @@ const distanceMeters = (aLat, aLng, bLat, bLng) => {
     Math.cos(p1) * Math.cos(p2) * Math.sin(dLambda / 2) * Math.sin(dLambda / 2);
   const y = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   return R * y;
-};
-
-const formatDuration = seconds => {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const pad = n => String(n).padStart(2, '0');
-  return `${pad(h)}:${pad(m)}:${pad(s)}`;
 };
 
 const segmentByOnlineStatus = points => {
@@ -193,7 +184,6 @@ const LocationTrackingScreen = () => {
   const [tempRemark, setTempRemark] = useState('');
   const [tempAmount, setTempAmount] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [fullScreenMapVisible, setFullScreenMapVisible] = useState(false);
 
   const mapRef = useRef(null);
   const mapRegionRef = useRef(DEFAULT_REGION);
@@ -1123,204 +1113,7 @@ const LocationTrackingScreen = () => {
           ))}
           {renderMapMarkers('main')}
         </MapView>
-
-        {/* GPS badge - commented out */}
-        {/* <View style={styles.gpsBadge}>
-          <View
-            style={[
-              styles.gpsDot,
-              {
-                backgroundColor:
-                  gpsStatus === 'active'
-                    ? '#10B981'
-                    : gpsStatus === 'searching'
-                      ? '#F59E0B'
-                      : '#EF4444',
-              },
-            ]}
-          />
-          <Text style={styles.gpsText}>
-            {gpsStatus === 'active'
-              ? 'GPS Active'
-              : gpsStatus === 'searching'
-                ? 'GPS Searching...'
-                : 'GPS Idle'}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.expandBtn}
-          onPress={() => setFullScreenMapVisible(true)}
-        >
-          <Icon name="expand" size={18} color="#374151" />
-        </TouchableOpacity> */}
       </View>
-
-      {/* Full screen map modal - commented out */}
-      {/* <Modal
-        visible={fullScreenMapVisible}
-        animationType="slide"
-        onRequestClose={() => setFullScreenMapVisible(false)}
-      >
-        <View style={styles.fullMapWrap}>
-          <TouchableOpacity
-            style={styles.fullMapClose}
-            onPress={() => setFullScreenMapVisible(false)}
-          >
-            <Icon name="times" size={20} color="#111" />
-          </TouchableOpacity>
-          <MapView
-            style={StyleSheet.absoluteFill}
-            provider={PROVIDER_GOOGLE}
-            initialRegion={mapRegionRef.current || DEFAULT_REGION}
-            showsUserLocation
-            showsMyLocationButton
-          >
-            {segments.map((segment, index) => (
-              <Polyline
-                key={`segment-full-${index}`}
-                coordinates={segment.coordinates}
-                strokeColor={segment.isOnline ? '#438AFF' : '#DC2626'}
-                strokeWidth={4}
-              />
-            ))}
-            {renderMapMarkers('full')}
-          </MapView>
-        </View>
-      </Modal> */}
-
-      {/* Card with icon, title, stats, refresh - commented out */}
-      {/* <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.card}>
-          <Icon
-            name={isTracking ? 'map-marker' : 'map-o'}
-            size={46}
-            color={isTracking ? '#10B981' : '#438AFF'}
-          />
-          <Text style={styles.title}>{isTracking ? 'Tracking Active' : 'Location Tracking'}</Text>
-          <Text style={styles.subtitle}>
-            {isTracking
-              ? 'Foreground + native background tracking is running.'
-              : 'Start to record route and keep offline-safe points.'}
-          </Text>
-
-          {isTracking && (
-            <View style={styles.statsBox}>
-              <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Duration</Text>
-                <Text style={styles.statValue}>{formatDuration(durationSeconds)}</Text>
-              </View>
-              <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Points</Text>
-                <Text style={styles.statValue}>{locations.length}</Text>
-              </View>
-              <View style={styles.statRow}>
-                <Text style={styles.statLabel}>Photos</Text>
-                <Text style={styles.statValue}>{photoEntries.length}</Text>
-              </View>
-              {lastAddress ? (
-                <Text style={styles.addressText} numberOfLines={2}>
-                  Last: {lastAddress}
-                </Text>
-              ) : null}
-            </View>
-          )}
-
-          {errorText ? (
-            <View style={styles.errorBox}>
-              <Icon name="exclamation-triangle" size={14} color="#DC2626" />
-              <Text style={styles.errorText}>{errorText}</Text>
-            </View>
-          ) : null}
-
-          {isTracking ? (
-            <>
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={refreshLocations}
-                disabled={loading || uploadingPhoto}
-              >
-                <Icon name="refresh" size={16} color="#fff" style={styles.btnIcon} />
-                <Text style={styles.secondaryBtnText}>Refresh / Sync</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.photoBtn}
-                onPress={openAddPhoto}
-                disabled={loading || uploadingPhoto}
-              >
-                <Icon name="camera" size={18} color="#fff" style={styles.btnIcon} />
-                <Text style={styles.photoBtnText}>Add Photo with Location</Text>
-              </TouchableOpacity>
-            </>
-          ) : null}
-
-          <TouchableOpacity
-            style={[
-              styles.mainBtn,
-              isTracking ? styles.stopBtn : styles.startBtn,
-              (loading || uploadingPhoto) && styles.disabledBtn,
-            ]}
-            onPress={isTracking ? stopTracking : startTracking}
-            disabled={loading || uploadingPhoto}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Icon
-                  name={isTracking ? 'stop' : 'play'}
-                  size={18}
-                  color="#fff"
-                  style={styles.btnIcon}
-                />
-                <Text style={styles.mainBtnText}>
-                  {isTracking ? 'Stop Tracking' : 'Start Tracking'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {photoEntries.length > 0 ? (
-          <View style={styles.photoSection}>
-            <Text style={styles.photoSectionTitle}>Recent Photos</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {photoEntries
-                .filter(item => item.photoUri)
-                .slice(-20)
-                .reverse()
-                .map(item => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.photoCard}
-                    onPress={() =>
-                      navigation.navigate('FullImageScreen', { imageUrl: item.photoUri })
-                    }
-                  >
-                    <Image source={{ uri: item.photoUri }} style={styles.photoThumb} />
-                    <View style={styles.photoMeta}>
-                      <Text style={styles.photoRemark} numberOfLines={1}>
-                        {item.remark || 'No remark'}
-                      </Text>
-                      <Text style={styles.photoAmount}>
-                        {item.amount ? `Rs. ${item.amount}` : 'No amount'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-            </ScrollView>
-          </View>
-        ) : null}
-
-        <TouchableOpacity
-          style={styles.historyBtn}
-          onPress={() => navigation.navigate('TrackingHistory')}
-        >
-          <Icon name="history" size={18} color="#438AFF" style={styles.btnIcon} />
-          <Text style={styles.historyBtnText}>View Tracking History</Text>
-        </TouchableOpacity>
-      </ScrollView> */}
 
       {/* Only map + Start/Stop + Add Photo (when tracking) */}
       <View style={styles.controlsRow}>
@@ -1345,7 +1138,7 @@ const LocationTrackingScreen = () => {
                 style={styles.btnIcon}
               />
               <Text style={styles.mainBtnText}>
-                {isTracking ? 'Stop' : 'Start'}
+                {isTracking ? 'Punch Out' : 'Punch In'}
               </Text>
             </>
           )}
@@ -1377,23 +1170,23 @@ const LocationTrackingScreen = () => {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add Photo Details</Text>
+            <Text style={styles.modalTitle}>Add Location Details</Text>
             {tempPhotoFile?.uri ? (
               <Image source={{ uri: tempPhotoFile.uri }} style={styles.modalPreview} />
             ) : null}
             <TextInput
               style={styles.input}
-              placeholder="Remark (optional)"
+              placeholder="Location Name"
               value={tempRemark}
               onChangeText={setTempRemark}
             />
-            <TextInput
+            {/* <TextInput
               style={styles.input}
               placeholder="Amount (optional)"
               value={tempAmount}
               onChangeText={setTempAmount}
               keyboardType="numeric"
-            />
+            /> */}
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
@@ -1410,7 +1203,7 @@ const LocationTrackingScreen = () => {
                 {uploadingPhoto ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.submitBtnText}>Save</Text>
+                  <Text style={styles.submitBtnText}>Save Photo</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1443,47 +1236,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#E5E7EB',
   },
   flexBtn: { flex: 1 },
-  gpsBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  gpsDot: { width: 9, height: 9, borderRadius: 5, marginRight: 6 },
-  gpsText: { fontSize: 12, color: '#374151', fontWeight: '600' },
-  expandBtn: {
-    position: 'absolute',
-    right: 12,
-    bottom: 12,
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  fullMapWrap: { flex: 1, backgroundColor: '#fff' },
-  fullMapClose: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 46 : 24,
-    left: 16,
-    zIndex: 2,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   scroll: { flex: 1 },
   scrollContent: { padding: wp(4), paddingBottom: hp(3) },
   card: {
@@ -1507,34 +1259,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: hp(1.6),
   },
-  statsBox: {
-    width: '100%',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: wp(3.5),
-    marginBottom: hp(1.4),
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
   statLabel: { color: '#6B7280', fontSize: wp(3.8) },
   statValue: { color: '#111827', fontWeight: '700', fontSize: wp(3.9) },
-  addressText: { marginTop: 6, fontSize: wp(3.5), color: '#374151' },
-  errorBox: {
-    width: '100%',
-    marginBottom: hp(1),
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 8,
-    padding: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+ 
   errorText: { marginLeft: 8, flex: 1, color: '#B91C1C', fontSize: wp(3.5) },
   mainBtn: {
     width: '100%',
@@ -1580,7 +1307,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: wp(3.5),
   },
-  photoSectionTitle: { fontSize: wp(4.3), color: '#111827', fontWeight: '700', marginBottom: 8 },
   photoCard: {
     width: wp(36),
     borderWidth: 1,
@@ -1590,22 +1316,8 @@ const styles = StyleSheet.create({
     marginRight: wp(3),
     backgroundColor: '#fff',
   },
-  photoThumb: { width: '100%', height: hp(14), backgroundColor: '#F3F4F6' },
   photoMeta: { padding: wp(2.5) },
   photoRemark: { color: '#111827', fontWeight: '600', fontSize: wp(3.3) },
-  photoAmount: { color: '#6B7280', fontSize: wp(3.1), marginTop: 2 },
-  historyBtn: {
-    marginTop: hp(1.8),
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    paddingVertical: hp(1.5),
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-  },
-  historyBtnText: { color: '#2563EB', fontSize: wp(4), fontWeight: '600' },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1643,7 +1355,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#10B981',
+    backgroundColor: '#003384',
     alignItems: 'center',
   },
   submitBtnText: { color: '#fff', fontWeight: '700' },

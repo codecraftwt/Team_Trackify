@@ -76,9 +76,10 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: wp('5%'),
     fontWeight: 'bold',
-    marginBottom: hp('1.5%'),
+    // marginBottom: hp('1.5%'),
     textAlign: 'center',
     color: '#212529',
+    marginTop: hp('2%'),
 
   },
   contentContainer: {
