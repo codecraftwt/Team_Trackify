@@ -319,7 +319,8 @@ const LoginScreen = ({ navigation }) => {
           token,
           user._id.toString(),
           user.createdby || '',
-          user.role || 'user'
+          user.role || 'user',
+          user
         );
 
         console.log('User Logged In:', {
@@ -409,7 +410,12 @@ const LoginScreen = ({ navigation }) => {
           {/* Email Input with Icon */}
           <View style={styles.inputWrapper}>
             <View style={styles.iconContainer}>
-              <MaterialCommunityIcons name="email-outline" size={20} color="#999" />
+              <Icon
+                name="email"
+                size={20}
+                color="#A8A8A8"
+                style={styles.icon}
+              />
             </View>
             <TextInput
               style={styles.input}
@@ -426,7 +432,12 @@ const LoginScreen = ({ navigation }) => {
           {/* Password Input with Icon */}
           <View style={styles.inputWrapper}>
             <View style={styles.iconContainer}>
-              <MaterialCommunityIcons name="lock-outline" size={20} color="#999" />
+              <Icon
+                name="lock"
+                size={20}
+                color="#A8A8A8"
+                style={styles.icon}
+              />
             </View>
             <TextInput
               style={styles.input}
@@ -520,13 +531,14 @@ const styles = {
     fontSize: 24,
     fontFamily: 'Poppins-Bold',
     color: '#333',
+    marginBottom: 1,
     marginBottom: 5,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 14,
     fontFamily: 'Poppins-Regular',
-    color: '#666',
+    color: '#555',
     marginBottom: 30,
     textAlign: 'center',
   },
@@ -545,9 +557,9 @@ const styles = {
     height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRightWidth: 1,
-    borderRightColor: '#E0E0E0',
-    backgroundColor: '#F0F0F0',
+    // borderRightWidth: 1,
+    // borderRightColor: '#E0E0E0',
+    // backgroundColor: '#F0F0F0',
     borderTopLeftRadius: 10,
     borderBottomLeftRadius: 10,
   },

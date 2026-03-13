@@ -11,7 +11,6 @@ import SplashScreen from '../Screens/SplashScreen';
 import LoginScreen from '../Screens/LoginScreen';
 import OTPScreen from '../Screens/OTPScreen';
 import Home from '../Screens/Home';
-import Settings from '../Screens/Settings';
 import ProfileScreen from '../Screens/ProfileScreen';
 import PersonalInfo from '../Screens/ProfileScreen/PersonalInfo';
 import BankDetails from '../Screens/ProfileScreen/BankDetails';
@@ -145,20 +144,14 @@ const TabNavigator = () => {
                 }}
             />
             <Tab.Screen
-                name="Settings"
-                component={Settings}
+                name="ProfileTab"
+                component={ProfileScreen}
                 options={{
                     tabBarIcon: ({ color, size }) => (
-                        <Icon name="ellipsis-horizontal" color={color} size={size} />
+                        <Icon name="person" color={color} size={size} />
                     ),
-                    headerShown: true,
-                    title: "More",
-                    headerTitleAlign: "center",
-                    headerTitleStyle: {
-                        fontWeight: '600',
-                        fontSize: 18,
-                        color: '#000',
-                    },
+                    headerShown: false,
+                    title: "Profile",
                 }}
             />
         </Tab.Navigator>
@@ -231,20 +224,14 @@ const AdminTabNavigator = () => {
                 }}
             />
               <Tab.Screen
-                name="Settings"
-                component={Settings}
+                name="ProfileTab"
+                component={ProfileScreen}
                 options={{
                     tabBarIcon: ({ color, size }) => (
-                        <Icon name="ellipsis-horizontal" color={color} size={size} />
+                        <Icon name="person" color={color} size={size} />
                     ),
-                    headerShown: true,
-                    title: "More",
-                    headerTitleAlign: "center",
-                    headerTitleStyle: {
-                        fontWeight: '600',
-                        fontSize: 18,
-                        color: '#000',
-                    },
+                    headerShown: false,
+                    title: "Profile",
                 }}
             />
         </Tab.Navigator>

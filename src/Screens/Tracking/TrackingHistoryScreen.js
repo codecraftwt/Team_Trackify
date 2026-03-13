@@ -13,50 +13,17 @@ import Icon from 'react-native-vector-icons/FontAwesome';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import * as TrackingService from '../../services/TrackingService';
 
-const formatDate = (iso) => {
+const formatTime = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso);
-  return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-const formatDuration = (seconds) => {
-  if (seconds == null) return '—';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(h)}:${pad(m)}`;
+const formatKm = (meters) => {
+  if (!meters) return '0 km';
+  return `${(meters / 1000).toFixed(2)} km`;
 };
 
-const formatDistance = (meters) => {
-  if (meters == null) return '—';
-  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
-  return `${Math.round(meters)} m`;
-};
-
-const SessionItem = ({ item, onPress }) => {
-  const isActive = item.endTime == null;
-  return (
-    <TouchableOpacity style={styles.item} onPress={() => onPress(item)} activeOpacity={0.7}>
-      <View style={[styles.itemIndicator, isActive && styles.itemIndicatorActive]} />
-      <View style={styles.itemBody}>
-        <Text style={styles.itemDate}>{formatDate(item.startTime)}</Text>
-        <View style={styles.itemRow}>
-          <Text style={styles.itemLabel}>Duration</Text>
-          <Text style={styles.itemValue}>{formatDuration(item.duration)}</Text>
-        </View>
-        <View style={styles.itemRow}>
-          <Text style={styles.itemLabel}>Distance</Text>
-          <Text style={styles.itemValue}>{formatDistance(item.totalDistance)}</Text>
-        </View>
-        {isActive && <Text style={styles.activeBadge}>Active</Text>}
-      </View>
-      <Icon name="chevron-right" size={18} color="#9ca3af" />
-    </TouchableOpacity>
-  );
-};
-
-// Helper to get a stable session id from API response objects.
-// Backend might use different property names (id, sessionId, trackingSessionId, etc.).
 const getSessionId = (session) =>
   session?.id ??
   session?.sessionId ??
@@ -65,19 +32,62 @@ const getSessionId = (session) =>
   session?.TrackingSessionId ??
   null;
 
+const SessionItem = ({ item, onPress }) => {
+  const start = formatTime(item.startTime);
+  const end = formatTime(item.endTime);
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.timeRow}>
+        <Icon name="clock-o" size={16} color="#2563eb" />
+        <Text style={styles.timeText}>
+          {start} - {end}
+        </Text>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.infoRow}>
+        <Icon name="motorcycle" size={18} color="#3b82f6" />
+        <Text style={styles.infoText}>
+          Delivery Stations: {item.deliveryStations || 0}
+        </Text>
+      </View>
+
+      <View style={styles.infoRow}>
+        <Icon name="random" size={18} color="#f59e0b" />
+        <Text style={styles.infoText}>
+          Travelled Distance: {formatKm(item.totalDistance)}
+        </Text>
+      </View>
+
+      <TouchableOpacity
+        style={styles.detailsButton}
+        onPress={() => onPress(item)}
+      >
+        <Icon name="eye" size={16} color="#2563eb" />
+        <Text style={styles.detailsText}>View Details</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
 const TrackingHistoryScreen = ({ route }) => {
   const navigation = useNavigation();
+
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+
   const limit = 20;
   const hasLoadedRef = useRef(false);
   const loadRef = useRef(() => {});
 
   const load = useCallback(async (isRefresh = false) => {
     const p = isRefresh ? 1 : page;
+
     if (isRefresh) setRefreshing(true);
     else if (p === 1) setLoading(true);
 
@@ -87,6 +97,7 @@ const TrackingHistoryScreen = ({ route }) => {
         limit,
         sort: 'createdAt_desc',
       });
+
       const list = res.sessions || [];
       const total = res.totalCount ?? 0;
 
@@ -95,52 +106,53 @@ const TrackingHistoryScreen = ({ route }) => {
       } else {
         setSessions((prev) => [...prev, ...list]);
       }
+
       setHasMore(list.length === limit && p * limit < total);
-      const nextPage = list.length === limit ? p + 1 : p;
-      setPage(nextPage);
+      setPage(list.length === limit ? p + 1 : p);
     } catch (e) {
-      console.error('getSessions failed:', e);
+      console.log('Session error', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [page]);
+
   loadRef.current = load;
 
   useFocusEffect(
     useCallback(() => {
       const refresh = route?.params?.refresh;
+
       if (!hasLoadedRef.current || refresh) {
         hasLoadedRef.current = true;
         loadRef.current(true);
       }
+
       if (refresh) navigation.setParams({ refresh: false });
-    }, [route?.params?.refresh, navigation])
+    }, [route?.params?.refresh])
   );
 
-  const onRefresh = useCallback(() => load(true), [load]);
+  const onRefresh = () => load(true);
 
-  const onEndReached = useCallback(() => {
-    if (!loading && !refreshing && hasMore) load(false);
-  }, [loading, refreshing, hasMore, load]);
+  const onEndReached = () => {
+    if (!loading && !refreshing && hasMore) {
+      load(false);
+    }
+  };
 
-  const onSessionPress = useCallback(
-    (item) => {
-      const sessionId = getSessionId(item);
-      if (!sessionId) {
-        console.warn('TrackingHistoryScreen: missing session id in item', item);
-        return;
-      }
-      navigation.navigate('TrackingSessionDetail', { sessionId });
-    },
-    [navigation]
-  );
+  const onSessionPress = (item) => {
+    const sessionId = getSessionId(item);
+
+    if (!sessionId) return;
+
+    navigation.navigate('TrackingSessionDetail', { sessionId });
+  };
 
   if (loading && sessions.length === 0) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#438AFF" />
-        <Text style={styles.loadingText}>Loading sessions…</Text>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={{ marginTop: 10 }}>Loading sessions...</Text>
       </View>
     );
   }
@@ -149,22 +161,23 @@ const TrackingHistoryScreen = ({ route }) => {
     <View style={styles.container}>
       <FlatList
         data={sessions}
-        keyExtractor={(s, index) => {
-          const id = getSessionId(s);
+        keyExtractor={(item, index) => {
+          const id = getSessionId(item);
           return id ? String(id) : `session-${index}`;
         }}
-        renderItem={({ item }) => <SessionItem item={item} onPress={onSessionPress} />}
-        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => (
+          <SessionItem item={item} onPress={onSessionPress} />
+        )}
+        contentContainerStyle={{ paddingBottom: hp(4) }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#438AFF']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         onEndReached={onEndReached}
-        onEndReachedThreshold={0.3}
+        onEndReachedThreshold={0.4}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Icon name="history" size={48} color="#d1d5db" />
-            <Text style={styles.emptyText}>No tracking sessions yet</Text>
-            <Text style={styles.emptySub}>Start tracking from the main screen</Text>
+            <Icon name="history" size={50} color="#d1d5db" />
+            <Text style={styles.emptyText}>No tracking sessions</Text>
           </View>
         }
       />
@@ -172,44 +185,89 @@ const TrackingHistoryScreen = ({ route }) => {
   );
 };
 
+export default TrackingHistoryScreen;
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  listContent: { paddingHorizontal: wp(4), paddingBottom: hp(4) },
-  centered: {
+  container: {
+    flex: 1,
+    backgroundColor: '#f4f6f8',
+    paddingHorizontal: wp(4),
+  },
+
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
   },
-  loadingText: { marginTop: hp(1), fontSize: wp(4), color: '#6b7280' },
-  item: {
+
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+
+  timeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: wp(4),
-    marginTop: hp(1.5),
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
-  itemIndicator: {
-    width: 4,
-    height: '100%',
-    borderRadius: 2,
-    backgroundColor: '#438AFF',
-    marginRight: wp(3),
-    minHeight: 40,
-  },
-  itemIndicatorActive: { backgroundColor: '#34a853' },
-  itemBody: { flex: 1 },
-  itemDate: { fontSize: wp(4), fontWeight: '600', color: '#111', marginBottom: hp(0.5) },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: hp(0.3) },
-  itemLabel: { fontSize: wp(3.2), color: '#6b7280' },
-  itemValue: { fontSize: wp(3.5), fontWeight: '500', color: '#374151' },
-  activeBadge: { marginTop: hp(0.5), fontSize: wp(3), color: '#34a853', fontWeight: '600' },
-  empty: { alignItems: 'center', paddingTop: hp(15) },
-  emptyText: { fontSize: wp(4.5), fontWeight: '600', color: '#374151', marginTop: hp(2) },
-  emptySub: { fontSize: wp(3.8), color: '#6b7280', marginTop: hp(0.5) },
-});
 
-export default TrackingHistoryScreen;
+  timeText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 10,
+  },
+
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+
+  infoText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#6b7280',
+  },
+
+  detailsButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginTop: 12,
+  },
+
+  detailsText: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+
+  empty: {
+    alignItems: 'center',
+    marginTop: hp(20),
+  },
+
+  emptyText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+});

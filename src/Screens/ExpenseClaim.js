@@ -142,7 +142,7 @@ const ExpenseClaim = () => {
       <Button
         title="Send For Approval"
         backgroundColor="#438aff"
-        onPress={() => navigation.navigate("UserTabs", { screen: "Settings" })}
+        onPress={() => navigation.navigate("UserTabs", { screen: "ProfileTab" })}
         style={styles.submitButton}
       />
     </View>

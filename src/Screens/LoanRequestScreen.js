@@ -321,7 +321,7 @@ const LoanRequestScreen = () => {
         setAlertVisible(true);
         setTimeout(() => {
           setAlertVisible(false);
-          navigation.navigate("UserTabs", { screen: "Settings" });
+          navigation.navigate("UserTabs", { screen: "ProfileTab" });
         }, 4000);
       } else {
         Alert.alert("Error", "Failed to submit loan application.");

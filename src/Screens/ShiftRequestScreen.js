@@ -134,7 +134,7 @@ const ShiftRequestScreen = () => {
         // auto close after 2 seconds and navigate
         setTimeout(() => {
           setAlertVisible(false);
-          navigation.navigate("UserTabs", { screen: "Settings" });
+          navigation.navigate("UserTabs", { screen: "ProfileTab" });
         }, 4000); // 2000 ms = 2 seconds
       } else {
         Alert.alert("Error", "Failed to submit shift application.");
