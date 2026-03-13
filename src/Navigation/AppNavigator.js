@@ -134,7 +134,7 @@ const TabNavigator = () => {
                     tabBarIcon: ({ color, size }) => (
                         <Icon name="time-outline" color={color} size={size} />
                     ),
-                    headerShown: true,
+                    headerShown: false,
                     title: "Tracking History",
                     headerTitleAlign: "center",
                     headerTitleStyle: {

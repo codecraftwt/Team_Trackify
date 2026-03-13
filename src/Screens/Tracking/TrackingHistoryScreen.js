@@ -12,6 +12,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import * as TrackingService from '../../services/TrackingService';
+import CustomHeader from '../../Component/CustomHeader';
 
 const formatTime = (iso) => {
   if (!iso) return '—';
@@ -83,7 +84,7 @@ const TrackingHistoryScreen = ({ route }) => {
 
   const limit = 20;
   const hasLoadedRef = useRef(false);
-  const loadRef = useRef(() => {});
+  const loadRef = useRef(() => { });
 
   const load = useCallback(async (isRefresh = false) => {
     const p = isRefresh ? 1 : page;
@@ -158,30 +159,37 @@ const TrackingHistoryScreen = ({ route }) => {
   }
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={sessions}
-        keyExtractor={(item, index) => {
-          const id = getSessionId(item);
-          return id ? String(id) : `session-${index}`;
-        }}
-        renderItem={({ item }) => (
-          <SessionItem item={item} onPress={onSessionPress} />
-        )}
-        contentContainerStyle={{ paddingBottom: hp(4) }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={onEndReached}
-        onEndReachedThreshold={0.4}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Icon name="history" size={50} color="#d1d5db" />
-            <Text style={styles.emptyText}>No tracking sessions</Text>
-          </View>
-        }
+    <>
+      <CustomHeader
+        navigation={navigation}
+        title="Tracking History"
+        showBackButton={true}
       />
-    </View>
+      <View style={styles.container}>
+        <FlatList
+          data={sessions}
+          keyExtractor={(item, index) => {
+            const id = getSessionId(item);
+            return id ? String(id) : `session-${index}`;
+          }}
+          renderItem={({ item }) => (
+            <SessionItem item={item} onPress={onSessionPress} />
+          )}
+          contentContainerStyle={{ paddingTop: hp(1), paddingBottom: hp(4) }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          onEndReached={onEndReached}
+          onEndReachedThreshold={0.4}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Icon name="history" size={50} color="#d1d5db" />
+              <Text style={styles.emptyText}>No tracking sessions</Text>
+            </View>
+          }
+        />
+      </View>
+    </>
   );
 };
 
