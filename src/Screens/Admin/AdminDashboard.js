@@ -6,256 +6,203 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Image,
+  SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import CustomHeader from '../../Component/CustomHeader';
 
-// Static data for admin dashboard
+// Static data for team tracking dashboard
 const STATIC_DATA = {
-  adminName: 'Admin User',
-  adminEmail: 'admin@trackify.com',
-  totalEmployees: 150,
-  activeEmployees: 120,
-  onLeave: 15,
-  absent: 15,
-  pendingRequests: 25,
-  approvedRequests: 180,
-  rejectedRequests: 35,
-  todayAttendance: {
-    present: 105,
-    absent: 30,
-    onLeave: 15,
+  currentPlan: {
+    amount: '₹2000',
+    users: '2-14',
+    type: 'Standard Plan',
+    expires: '19 March 2026',
+    duration: 'monthly',
+    description: 'Standard Plan for 1 month create upto 10 users'
   },
-  monthlyStats: {
-    totalWorkingDays: 22,
-    totalPresent: 95,
-    averageAttendance: '87%',
+  trackingOverview: {
+    activeUsers: 9,
+    inactiveUsers: 1,
+    todayCheckedIn: 0,
+    todayCheckedOut: 0,
+    activePlans: 5,
+    liveTrackingUsers: 0
   },
-  recentActivities: [
-    { id: 1, type: 'leave', message: 'John Doe requested leave', time: '2 hours ago' },
-    { id: 2, type: 'attendance', message: 'Marked attendance for all employees', time: '4 hours ago' },
-    { id: 3, type: 'request', message: 'Loan request approved for Sarah', time: '5 hours ago' },
-    { id: 4, type: 'leave', message: 'Mike Smith leave request rejected', time: '1 day ago' },
-  ],
-  departmentStats: [
-    { name: 'Engineering', employees: 50, active: 45 },
-    { name: 'Sales', employees: 40, active: 35 },
-    { name: 'Marketing', employees: 30, active: 25 },
-    { name: 'HR', employees: 15, active: 14 },
-    { name: 'Finance', employees: 15, active: 14 },
-  ],
+  recentActivities: []
 };
 
-const AdminDashboard = ({ navigation }) => {
-  const renderStatCard = (title, value, icon, color) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <View style={styles.statIconContainer}>
-        <Icon name={icon} size={24} color={color} />
-      </View>
-      <View style={styles.statContent}>
-        <Text style={styles.statValue}>{value}</Text>
+const TeamTrackifyDashboard = ({ navigation }) => {
+  const renderStatCard = (title, value, showDetails = true) => (
+    <View style={styles.statCard}>
+      <View style={styles.statHeader}>
         <Text style={styles.statTitle}>{title}</Text>
+        {showDetails && (
+          <TouchableOpacity>
+            <Text style={styles.viewDetailsText}>View Details →</Text>
+          </TouchableOpacity>
+        )}
       </View>
+      <Text style={styles.statValue}>{value}</Text>
     </View>
   );
 
-  const renderActivityItem = (item) => {
-    const getIcon = (type) => {
-      switch (type) {
-        case 'leave': return 'event-available';
-        case 'attendance': return 'check-circle';
-        case 'request': return 'request-page';
-        default: return 'info';
-      }
-    };
-    const getColor = (type) => {
-      switch (type) {
-        case 'leave': return '#FF9800';
-        case 'attendance': return '#4CAF50';
-        case 'request': return '#2196F3';
-        default: return '#999';
-      }
-    };
-
-    return (
-      <View key={item.id} style={styles.activityItem}>
-        <View style={[styles.activityIcon, { backgroundColor: getColor(item.type) + '20' }]}>
-          <Icon name={getIcon(item.type)} size={20} color={getColor(item.type)} />
-        </View>
-        <View style={styles.activityContent}>
-          <Text style={styles.activityMessage}>{item.message}</Text>
-          <Text style={styles.activityTime}>{item.time}</Text>
+  const renderMetricCard = (label, value, status, icon) => (
+    <View style={styles.metricCard}>
+      <View style={styles.metricHeader}>
+        <Text style={styles.metricLabel}>{label}</Text>
+        <View style={styles.metricStatus}>
+          {icon === 'live' && <View style={styles.liveDot} />}
+          {icon === 'completed' && <Icon name="check-circle" size={16} color="#4CAF50" />}
+          <Text style={[
+            styles.metricStatusText,
+            icon === 'live' && styles.liveText,
+            icon === 'completed' && styles.completedText
+          ]}>
+            {status}
+          </Text>
         </View>
       </View>
-    );
-  };
-
-  const renderDepartmentCard = (dept) => (
-    <View key={dept.name} style={styles.departmentCard}>
-      <View style={styles.departmentInfo}>
-        <Text style={styles.departmentName}>{dept.name}</Text>
-        <Text style={styles.departmentEmployees}>{dept.employees} employees</Text>
-      </View>
-      <View style={styles.departmentStats}>
-        <Text style={styles.departmentActive}>{dept.active} active</Text>
-        <View style={styles.progressBar}>
-          <View 
-            style={[
-              styles.progressFill, 
-              { width: `${(dept.active / dept.employees) * 100}%` }
-            ]} 
-          />
-        </View>
-      </View>
+      <Text style={styles.metricValue}>{value}</Text>
     </View>
   );
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.adminName}>{STATIC_DATA.adminName}</Text>
-          </View>
-          <View style={styles.profileContainer}>
-            <View style={styles.profileCircle}>
-              <Icon name="person" size={30} color="#3088C7" />
-            </View>
-          </View>
-        </View>
-      </View>
+      {/* <View style={styles.header}>
+        <Text style={styles.headerTitle}>Team Trackify</Text>
+      </View> */}
+
+      {/* <CustomHeader navigation={navigation} /> */}
+       <CustomHeader
+          // navigation={navigation}
+          title="Team Trackify"
+        />
 
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        {/* Today's Attendance Summary */}
+        {/* Current Plan Section */}
+        <View style={styles.planSection}>
+          <View style={styles.planHeader}>
+            <Text style={styles.sectionTitle}>Current Plan</Text>
+            <TouchableOpacity>
+              <Text style={styles.changePlanText}>Change</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.planCard}>
+            <View style={styles.planRow}>
+              <Text style={styles.planLabel}>Amount:</Text>
+              <Text style={styles.planValue}>{STATIC_DATA.currentPlan.amount}</Text>
+            </View>
+            <View style={styles.planRow}>
+              <Text style={styles.planLabel}>Users:</Text>
+              <Text style={styles.planValue}>{STATIC_DATA.currentPlan.users}</Text>
+            </View>
+            
+            <View style={styles.planTypeContainer}>
+              <Text style={styles.planType}>{STATIC_DATA.currentPlan.type}</Text>
+            </View>
+            
+            <View style={styles.planExpiryRow}>
+              <Icon name="access-time" size={16} color="#666" />
+              <Text style={styles.planExpiryText}>
+                Expires: {STATIC_DATA.currentPlan.expires}
+              </Text>
+              <Text style={styles.planDuration}> • {STATIC_DATA.currentPlan.duration}</Text>
+            </View>
+            
+            <Text style={styles.planDescription}>
+              {STATIC_DATA.currentPlan.description}
+            </Text>
+          </View>
+        </View>
+
+        {/* Tracking Overview Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Attendance</Text>
-          <View style={styles.todayAttendanceContainer}>
-            <View style={styles.attendanceItem}>
-              <Text style={[styles.attendanceValue, { color: '#4CAF50' }]}>
-                {STATIC_DATA.todayAttendance.present}
-              </Text>
-              <Text style={styles.attendanceLabel}>Present</Text>
+          <Text style={styles.sectionTitle}>Tracking Overview:</Text>
+          
+          <View style={styles.statsRow}>
+            <View style={styles.statsLeft}>
+              {renderStatCard('Active Users', STATIC_DATA.trackingOverview.activeUsers)}
+              {renderStatCard('Inactive Users', STATIC_DATA.trackingOverview.inactiveUsers)}
             </View>
-            <View style={styles.attendanceDivider} />
-            <View style={styles.attendanceItem}>
-              <Text style={[styles.attendanceValue, { color: '#F44336' }]}>
-                {STATIC_DATA.todayAttendance.absent}
-              </Text>
-              <Text style={styles.attendanceLabel}>Absent</Text>
-            </View>
-            <View style={styles.attendanceDivider} />
-            <View style={styles.attendanceItem}>
-              <Text style={[styles.attendanceValue, { color: '#FF9800' }]}>
-                {STATIC_DATA.todayAttendance.onLeave}
-              </Text>
-              <Text style={styles.attendanceLabel}>On Leave</Text>
+            
+            <View style={styles.statsRight}>
+              <View style={styles.checkedCard}>
+                <Text style={styles.checkedTitle}>Today's Checked In</Text>
+                <Text style={styles.checkedValue}>{STATIC_DATA.trackingOverview.todayCheckedIn}</Text>
+              </View>
+              <View style={styles.checkedCard}>
+                <Text style={styles.checkedTitle}>Today's Checked Out</Text>
+                <Text style={styles.checkedValue}>{STATIC_DATA.trackingOverview.todayCheckedOut}</Text>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* Quick Stats */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Stats</Text>
-          <View style={styles.statsGrid}>
-            {renderStatCard('Total Employees', STATIC_DATA.totalEmployees, 'people', '#3088C7')}
-            {renderStatCard('Active Today', STATIC_DATA.activeEmployees, 'how-to-reg', '#4CAF50')}
-            {renderStatCard('On Leave', STATIC_DATA.onLeave, 'event-busy', '#FF9800')}
-            {renderStatCard('Absent', STATIC_DATA.absent, 'person-add', '#F44336')}
+        {/* Additional Metrics Section (from second image) */}
+        <View style={styles.metricsSection}>
+          <View style={styles.metricsRow}>
+            {renderMetricCard('Today\'s Checked In', '0', 'Live Status ●', 'live')}
+            {renderMetricCard('Today\'s Checked Out', '0', 'Completed ✔', 'completed')}
           </View>
-        </View>
 
-        {/* Request Stats */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Requests Overview</Text>
-          <View style={styles.statsGrid}>
-            {renderStatCard('Pending', STATIC_DATA.pendingRequests, 'pending-actions', '#FF9800')}
-            {renderStatCard('Approved', STATIC_DATA.approvedRequests, 'check-circle', '#4CAF50')}
-            {renderStatCard('Rejected', STATIC_DATA.rejectedRequests, 'cancel', '#F44336')}
+          <View style={styles.actionCardsRow}>
+            <TouchableOpacity style={styles.actionCard}>
+              <Text style={styles.actionCardTitle}>Active Plans</Text>
+              <Text style={styles.actionCardValue}>5</Text>
+              <Text style={styles.actionCardLink}>Manage Plans →</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionCard}>
+              <Text style={styles.actionCardTitle}>Live Tracking Users</Text>
+              <Text style={styles.actionCardValue}>0</Text>
+              <Text style={styles.actionCardLink}>View on Map ▷</Text>
+            </TouchableOpacity>
           </View>
-        </View>
-
-        {/* Monthly Stats */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Monthly Statistics</Text>
-          <View style={styles.monthlyCard}>
-            <View style={styles.monthlyItem}>
-              <Text style={styles.monthlyValue}>{STATIC_DATA.monthlyStats.totalWorkingDays}</Text>
-              <Text style={styles.monthlyLabel}>Working Days</Text>
-            </View>
-            <View style={styles.monthlyDivider} />
-            <View style={styles.monthlyItem}>
-              <Text style={styles.monthlyValue}>{STATIC_DATA.monthlyStats.totalPresent}</Text>
-              <Text style={styles.monthlyLabel}>Days Present</Text>
-            </View>
-            <View style={styles.monthlyDivider} />
-            <View style={styles.monthlyItem}>
-              <Text style={[styles.monthlyValue, { color: '#4CAF50' }]}>
-                {STATIC_DATA.monthlyStats.averageAttendance}
-              </Text>
-              <Text style={styles.monthlyLabel}>Attendance</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Department Overview */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Department Overview</Text>
-          {STATIC_DATA.departmentStats.map(renderDepartmentCard)}
         </View>
 
         {/* Recent Activities */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Activities</Text>
-          <View style={styles.activitiesContainer}>
-            {STATIC_DATA.recentActivities.map(renderActivityItem)}
+          <View style={styles.recentHeader}>
+            <Text style={styles.sectionTitle}>Recent Activities</Text>
+          </View>
+          <View style={styles.recentEmptyState}>
+            <Icon name="info-outline" size={24} color="#999" />
+            <Text style={styles.recentEmptyText}>No recent activity</Text>
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsContainer}>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('AdminRequest')}
-            >
-              <Icon name="assignment" size={24} color="#3088C7" />
-              <Text style={styles.actionText}>Requests</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('AdminAttendenceshow')}
-            >
-              <Icon name="event-note" size={24} color="#3088C7" />
-              <Text style={styles.actionText}>Attendance</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('EmployeeListScreen')}
-            >
-              <Icon name="people" size={24} color="#3088C7" />
-              <Text style={styles.actionText}>Employees</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('Faceenrolled')}
-            >
-              <Icon name="face" size={24} color="#3088C7" />
-              <Text style={styles.actionText}>Face Scan</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity style={styles.navItem}>
+            <Icon name="home" size={24} color="#3088C7" />
+            <Text style={[styles.navText, styles.navTextActive]}>Home</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.navItem}>
+            <Icon name="people" size={24} color="#999" />
+            <Text style={styles.navText}>Users</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.navItem}>
+            <Icon name="assessment" size={24} color="#999" />
+            <Text style={styles.navText}>Reports</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.navItem}>
+            <Icon name="person" size={24} color="#999" />
+            <Text style={styles.navText}>Profile</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.bottomPadding} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -265,46 +212,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   header: {
-    backgroundColor: '#3088C7',
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  welcomeText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-  },
-  adminName: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontFamily: 'Poppins-Bold',
-    marginTop: 4,
-  },
-  profileContainer: {
-    alignItems: 'center',
-  },
-  profileCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
     backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: 15,
   },
   section: {
-    marginTop: 20,
+    padding: 20,
+    paddingBottom: 10,
+  },
+  planSection: {
+    padding: 20,
+    backgroundColor: '#FFFFFF',
+    marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 18,
@@ -312,227 +241,268 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 12,
   },
-  todayAttendanceContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 20,
+  planHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  changePlanText: {
+    color: '#3088C7',
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+  },
+  planCard: {
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 16,
+  },
+  planRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  planLabel: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+  },
+  planValue: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: '#333',
+  },
+  planTypeContainer: {
+    backgroundColor: '#E8F0FE',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginVertical: 8,
+  },
+  planType: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+    color: '#3088C7',
+  },
+  planExpiryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  planExpiryText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+    marginLeft: 4,
+  },
+  planDuration: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+  },
+  planDescription: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#888',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statsLeft: {
+    flex: 1,
+    marginRight: 10,
+  },
+  statsRight: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  statCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
     elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 2,
   },
-  attendanceItem: {
+  statHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    flex: 1,
+    marginBottom: 8,
   },
-  attendanceValue: {
+  statTitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+  },
+  viewDetailsText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+    color: '#3088C7',
+  },
+  statValue: {
+    fontSize: 32,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+  },
+  checkedCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  checkedTitle: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+    marginBottom: 8,
+  },
+  checkedValue: {
+    fontSize: 32,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+  },
+  metricsSection: {
+    padding: 20,
+    backgroundColor: '#FFFFFF',
+    marginVertical: 10,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  metricCard: {
+    flex: 1,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 5,
+  },
+  metricHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  metricLabel: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+  },
+  metricStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4CAF50',
+    marginRight: 4,
+  },
+  metricStatusText: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Medium',
+  },
+  liveText: {
+    color: '#4CAF50',
+  },
+  completedText: {
+    color: '#4CAF50',
+  },
+  metricValue: {
     fontSize: 28,
     fontFamily: 'Poppins-Bold',
     color: '#333',
   },
-  attendanceLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginTop: 4,
-  },
-  attendanceDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#E0E0E0',
-  },
-  statsGrid: {
+  actionCardsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  statCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 15,
-    width: '48%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  statIconContainer: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  statContent: {
+  actionCard: {
     flex: 1,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 5,
   },
-  statValue: {
-    fontSize: 22,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-  },
-  statTitle: {
+  actionCardTitle: {
     fontSize: 12,
     fontFamily: 'Poppins-Regular',
     color: '#666',
+    marginBottom: 8,
   },
-  monthlyCard: {
+  actionCardValue: {
+    fontSize: 28,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  actionCardLink: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+    color: '#3088C7',
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  recentEmptyState: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 20,
+    borderRadius: 12,
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  recentEmptyText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: '#999',
+    marginTop: 8,
+  },
+  bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  monthlyItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  monthlyValue: {
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
-    color: '#3088C7',
-  },
-  monthlyLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginTop: 4,
-  },
-  monthlyDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#E0E0E0',
-  },
-  departmentCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  departmentInfo: {
-    flex: 1,
-  },
-  departmentName: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-  },
-  departmentEmployees: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginTop: 2,
-  },
-  departmentStats: {
-    alignItems: 'flex-end',
-  },
-  departmentActive: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
-    color: '#4CAF50',
-    marginBottom: 6,
-  },
-  progressBar: {
-    width: 80,
-    height: 6,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 3,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#4CAF50',
-    borderRadius: 3,
-  },
-  activitiesContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+    marginTop: 10,
   },
-  activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+  navItem: {
     alignItems: 'center',
-    marginRight: 12,
   },
-  activityContent: {
-    flex: 1,
-  },
-  activityMessage: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    color: '#333',
-  },
-  activityTime: {
-    fontSize: 11,
+  navText: {
+    fontSize: 12,
     fontFamily: 'Poppins-Regular',
     color: '#999',
     marginTop: 2,
   },
-  actionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 15,
-    width: '23%',
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  actionText: {
-    fontSize: 11,
+  navTextActive: {
+    color: '#3088C7',
     fontFamily: 'Poppins-Medium',
-    color: '#333',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  bottomPadding: {
-    height: 30,
   },
 });
 
-export default AdminDashboard;
+export default TeamTrackifyDashboard;

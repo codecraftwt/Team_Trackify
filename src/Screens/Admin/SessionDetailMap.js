@@ -25,8 +25,6 @@ const SessionDetailMap = ({ navigation, route }) => {
   const [error, setError] = useState(null);
   const [showTimeline, setShowTimeline] = useState(false);
 
-  console.log('SessionDetailMap - Route params:', { userId, sessionId, sessionDate });
-
   // Fetch session details
   const fetchSessionDetails = useCallback(async () => {
     try {
@@ -106,31 +104,69 @@ const SessionDetailMap = ({ navigation, route }) => {
     return `${speed.toFixed(2)} km/h`;
   };
 
-  // Get marker color based on markerType
-  const getMarkerColor = (markerType) => {
-    switch (markerType) {
+  // Check if location has a photo
+  const hasPhoto = (location) => {
+    return location.photo && location.photo !== null;
+  };
+
+  // Filter locations for markers (only start, end, and photo locations)
+  const getMarkerLocations = () => {
+    if (!sessionData?.locations) return [];
+    
+    return sessionData.locations.filter(location => {
+      // Keep start marker
+      if (location.markerType === 'start') return true;
+      // Keep end marker
+      if (location.markerType === 'end') return true;
+      // Keep locations with photos
+      if (hasPhoto(location)) return true;
+      // Filter out all other waypoints
+      return false;
+    });
+  };
+
+  // Get marker color based on markerType or photo presence
+  const getMarkerColor = (location) => {
+    if (hasPhoto(location)) {
+      return '#FF9800'; // Orange for photo markers
+    }
+    switch (location.markerType) {
       case 'start':
-        return '#4CAF50';
+        return '#4CAF50'; // Green for start
       case 'end':
-        return '#F44336';
-      case 'waypoint':
-        return '#3088C7';
+        return '#F44336'; // Red for end
       default:
-        return '#3088C7';
+        return '#3088C7'; // Default blue (shouldn't be used now)
     }
   };
 
-  // Get marker icon based on markerType
-  const getMarkerIcon = (markerType) => {
-    switch (markerType) {
+  // Get marker icon based on markerType or photo presence
+  const getMarkerIcon = (location) => {
+    if (hasPhoto(location)) {
+      return 'photo-camera'; // Camera icon for photo markers
+    }
+    switch (location.markerType) {
       case 'start':
         return 'play-arrow';
       case 'end':
         return 'stop';
-      case 'waypoint':
-        return 'place';
       default:
         return 'place';
+    }
+  };
+
+  // Get marker title
+  const getMarkerTitle = (location) => {
+    if (hasPhoto(location)) {
+      return 'Photo Location';
+    }
+    switch (location.markerType) {
+      case 'start':
+        return 'Start Point';
+      case 'end':
+        return 'End Point';
+      default:
+        return 'Location';
     }
   };
 
@@ -277,6 +313,9 @@ const SessionDetailMap = ({ navigation, route }) => {
     );
   }
 
+  // Get markers to display (only start, end, and photo locations)
+  const markerLocations = getMarkerLocations();
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
@@ -301,31 +340,53 @@ const SessionDetailMap = ({ navigation, route }) => {
             lineDashPattern={null}
           />
           
-          {/* Markers for start, end, and waypoints */}
-          {sessionData?.locations?.map((location, index) => (
+          {/* Markers only for start, end, and photo locations */}
+          {markerLocations.map((location, index) => (
             <Marker
               key={location.id || index}
               coordinate={{
                 latitude: location.latitude,
                 longitude: location.longitude,
               }}
-              title={location.markerType === 'start' ? 'Start' : location.markerType === 'end' ? 'End' : `Point ${index + 1}`}
+              title={getMarkerTitle(location)}
               description={location.address || ''}
-              pinColor={getMarkerColor(location.markerType)}
             >
               <View style={[
                 styles.markerContainer,
-                { backgroundColor: getMarkerColor(location.markerType) }
+                { backgroundColor: getMarkerColor(location) }
               ]}>
                 <Icon 
-                  name={getMarkerIcon(location.markerType)} 
+                  name={getMarkerIcon(location)} 
                   size={16} 
                   color="#FFF" 
                 />
               </View>
             </Marker>
           ))}
+
+          {/* Optional: Show photo count if there are multiple photos at same location */}
+          {markerLocations.filter(loc => hasPhoto(loc)).map((location, index) => {
+            // This would require additional logic to count photos per location
+            // For now, just showing the marker is sufficient
+            return null;
+          })}
         </MapView>
+
+        {/* Marker Legend */}
+        <View style={styles.legendContainer}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+            <Text style={styles.legendText}>Start</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
+            <Text style={styles.legendText}>End</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+            <Text style={styles.legendText}>Photo</Text>
+          </View>
+        </View>
 
         {/* Toggle Timeline Button */}
         <TouchableOpacity 
@@ -404,9 +465,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   markerContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -416,6 +477,35 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  legendContainer: {
+    position: 'absolute',
+    top: 15,
+    left: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 8,
+    padding: 8,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  legendText: {
+    fontSize: 10,
+    fontFamily: 'Poppins-Regular',
+    color: '#333',
   },
   timelineToggle: {
     position: 'absolute',

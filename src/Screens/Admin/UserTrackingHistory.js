@@ -9,8 +9,10 @@ import {
   RefreshControl,
   TouchableOpacity,
   ScrollView,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Calendar } from 'react-native-calendars';
 import { useAuth } from '../../config/auth-context';
 import { getUserTrackingSummary, getSessionDetails } from '../../config/AdminService';
 
@@ -25,6 +27,10 @@ const UserTrackingHistory = ({ navigation, route }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [markedDates, setMarkedDates] = useState({});
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   // Fetch user tracking summary
   const fetchUserTrackingSummary = useCallback(async (showLoading = true) => {
@@ -55,6 +61,78 @@ const UserTrackingHistory = ({ navigation, route }) => {
       setIsRefreshing(false);
     }
   }, [adminId, userId]);
+
+  // Update marked dates when tracking data changes
+  useEffect(() => {
+    if (trackingData?.availableDates) {
+      const marks = {};
+      
+      // Create a map of dates and their session counts
+      const dateSessionCount = {};
+      trackingData.recentSessions.forEach(session => {
+        const dateStr = new Date(session.date).toISOString().split('T')[0];
+        dateSessionCount[dateStr] = (dateSessionCount[dateStr] || 0) + 1;
+      });
+      
+      // Mark all available dates with dots
+      trackingData.availableDates.forEach(date => {
+        const dateStr = new Date(date).toISOString().split('T')[0];
+        const sessionCount = dateSessionCount[dateStr] || 0;
+        
+        marks[dateStr] = {
+          dots: [
+            {
+              key: 'tracking',
+              color: '#3088C7',
+              selectedDotColor: '#FFF',
+            }
+          ],
+          marked: true,
+          customStyles: {
+            container: {
+              backgroundColor: selectedDate === date ? '#3088C7' : 'transparent',
+            },
+            text: {
+              color: selectedDate === date ? '#FFF' : '#333',
+              fontWeight: selectedDate === date ? 'bold' : 'normal',
+            },
+          },
+        };
+        
+        // Add session count if more than one session
+        if (sessionCount > 1) {
+          marks[dateStr].dots.push({
+            key: 'count',
+            color: '#FF9800',
+            selectedDotColor: '#FFF',
+          });
+        }
+      });
+      
+      // Add selected date marking
+      if (selectedDate) {
+        const selectedDateStr = new Date(selectedDate).toISOString().split('T')[0];
+        if (marks[selectedDateStr]) {
+          marks[selectedDateStr] = {
+            ...marks[selectedDateStr],
+            selected: true,
+            customStyles: {
+              container: {
+                backgroundColor: '#3088C7',
+                borderRadius: 20,
+              },
+              text: {
+                color: '#FFF',
+                fontWeight: 'bold',
+              },
+            },
+          };
+        }
+      }
+      
+      setMarkedDates(marks);
+    }
+  }, [trackingData, selectedDate]);
 
   // Initial fetch
   useEffect(() => {
@@ -120,7 +198,55 @@ const UserTrackingHistory = ({ navigation, route }) => {
     return formatDuration(durationInSeconds);
   };
 
-  // Render stats card
+  // Get filtered sessions based on selected date
+  const getFilteredSessions = () => {
+    if (!trackingData?.recentSessions) return [];
+    if (!selectedDate) return trackingData.recentSessions;
+    
+    // Convert selectedDate to YYYY-MM-DD format for comparison
+    const selectedDateObj = new Date(selectedDate);
+    const selectedDateStr = selectedDateObj.toISOString().split('T')[0];
+    
+    return trackingData.recentSessions.filter(session => {
+      // Convert session date to YYYY-MM-DD format for comparison
+      const sessionDateObj = new Date(session.date);
+      const sessionDateStr = sessionDateObj.toISOString().split('T')[0];
+      return sessionDateStr === selectedDateStr;
+    });
+  };
+
+  // Get session count for a specific date
+  const getSessionCountForDate = (date) => {
+    if (!trackingData?.recentSessions) return 0;
+    const dateStr = new Date(date).toISOString().split('T')[0];
+    return trackingData.recentSessions.filter(session => {
+      const sessionDateStr = new Date(session.date).toISOString().split('T')[0];
+      return sessionDateStr === dateStr;
+    }).length;
+  };
+
+  // Handle month change in calendar
+  const onMonthChange = (month) => {
+    setCurrentMonth(new Date(month.dateString));
+  };
+
+  // Handle day press in calendar
+  const onDayPress = (day) => {
+    // Find the full date string that matches the selected day
+    const selectedFullDate = trackingData.availableDates.find(
+      date => date.startsWith(day.dateString)
+    );
+    
+    if (selectedFullDate) {
+      setSelectedDate(selectedFullDate);
+    } else {
+      // If no tracking data for this date, still allow selection but show message
+      setSelectedDate(day.dateString);
+    }
+    setCalendarVisible(false);
+  };
+
+  // Render stats card (unchanged)
   const renderStatsCard = () => {
     if (!trackingData?.stats) return null;
     const { stats } = trackingData;
@@ -168,7 +294,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
     );
   };
 
-  // Render user info card
+  // Render user info card (unchanged)
   const renderUserInfoCard = () => {
     if (!trackingData?.user) return null;
     const { user } = trackingData;
@@ -194,12 +320,11 @@ const UserTrackingHistory = ({ navigation, route }) => {
     );
   };
 
-  // Render session item
+  // Render session item (unchanged)
   const renderSessionItem = ({ item, index }) => (
     <TouchableOpacity 
       style={styles.sessionItem}
       onPress={() => {
-        // Navigate to session detail screen
         navigation.navigate('SessionDetailMap', { 
           userId: userId,
           sessionId: item.sessionId,
@@ -257,28 +382,121 @@ const UserTrackingHistory = ({ navigation, route }) => {
     </View>
   );
 
-  // Render available dates
-  const renderAvailableDates = () => {
+  // Render enhanced calendar with dots
+  const renderCalendarWithDots = () => {
     if (!trackingData?.availableDates || trackingData.availableDates.length === 0) {
       return null;
     }
 
     return (
-      <View style={styles.datesSection}>
-        <Text style={styles.sectionTitle}>Available Tracking Dates</Text>
-        <View style={styles.datesContainer}>
-          {trackingData.availableDates.map((date, index) => (
-            <View key={index} style={styles.dateBadge}>
-              <Icon name="event" size={12} color="#3088C7" />
-              <Text style={styles.dateText}>{formatDate(date)}</Text>
-            </View>
-          ))}
+      <View style={styles.calendarSection}>
+        <View style={styles.calendarHeader}>
+          <View style={styles.calendarTitleContainer}>
+            <Icon name="calendar-month" size={20} color="#3088C7" />
+            <Text style={styles.sectionTitle}>Tracking Calendar</Text>
+          </View>
+          <TouchableOpacity 
+            onPress={() => setCalendarVisible(!calendarVisible)}
+            style={styles.toggleCalendarButton}
+          >
+            <Icon 
+              name={calendarVisible ? "expand-less" : "expand-more"} 
+              size={24} 
+              color="#3088C7" 
+            />
+          </TouchableOpacity>
         </View>
+
+        {calendarVisible && (
+          <View style={styles.calendarContainer}>
+            <Calendar
+              onDayPress={onDayPress}
+              onMonthChange={onMonthChange}
+              markedDates={markedDates}
+              markingType={'multi-dot'}
+              theme={{
+                backgroundColor: '#FFFFFF',
+                calendarBackground: '#FFFFFF',
+                textSectionTitleColor: '#3088C7',
+                selectedDayBackgroundColor: '#3088C7',
+                selectedDayTextColor: '#FFFFFF',
+                todayTextColor: '#3088C7',
+                dayTextColor: '#2d4150',
+                textDisabledColor: '#d9e1e8',
+                dotColor: '#3088C7',
+                selectedDotColor: '#FFFFFF',
+                arrowColor: '#3088C7',
+                monthTextColor: '#3088C7',
+                textDayFontFamily: 'Poppins-Regular',
+                textMonthFontFamily: 'Poppins-Bold',
+                textDayHeaderFontFamily: 'Poppins-Medium',
+                textDayFontSize: 14,
+                textMonthFontSize: 16,
+                textDayHeaderFontSize: 12,
+                'stylesheet.calendar.main': {
+                  container: {
+                    paddingLeft: 5,
+                    paddingRight: 5,
+                    backgroundColor: '#ffffff',
+                  },
+                  monthView: {
+                    backgroundColor: '#ffffff',
+                  },
+                },
+              }}
+              style={styles.calendar}
+              renderArrow={(direction) => (
+                <Icon 
+                  name={`chevron-${direction}`} 
+                  size={24} 
+                  color="#3088C7" 
+                />
+              )}
+            />
+            
+            {/* Calendar Legend */}
+            <View style={styles.calendarLegend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#3088C7' }]} />
+                <Text style={styles.legendText}>Has tracking data</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
+                <Text style={styles.legendText}>Multiple sessions</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+                <Text style={styles.legendText}>Today</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Quick Stats for Selected Date */}
+        {selectedDate && (
+          <View style={styles.selectedDateInfo}>
+            <View style={styles.selectedDateHeader}>
+              <Icon name="event" size={18} color="#3088C7" />
+              <Text style={styles.selectedDateText}>
+                {formatDate(selectedDate)}
+              </Text>
+              <TouchableOpacity 
+                onPress={() => setSelectedDate(null)}
+                style={styles.clearDateButton}
+              >
+                <Icon name="close" size={16} color="#999" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.selectedDateStats}>
+              {getSessionCountForDate(selectedDate)} sessions on this day
+            </Text>
+          </View>
+        )}
       </View>
     );
   };
 
-  // Loading state
+  // Loading state (unchanged)
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -311,7 +529,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
       {/* Content */}
       {!error && trackingData && (
         <FlatList
-          data={trackingData.recentSessions || []}
+          data={getFilteredSessions()}
           renderItem={renderSessionItem}
           keyExtractor={(item, index) => item.sessionId || index.toString()}
           contentContainerStyle={styles.listContainer}
@@ -324,11 +542,20 @@ const UserTrackingHistory = ({ navigation, route }) => {
               {/* Stats Card */}
               {renderStatsCard()}
               
-              {/* Available Dates */}
-              {renderAvailableDates()}
+              {/* Calendar with Dots */}
+              {renderCalendarWithDots()}
               
               {/* Sessions Header */}
-              <Text style={styles.sectionTitle}>Recent Sessions</Text>
+              <View style={styles.sessionsHeader}>
+                <Text style={styles.sectionTitle}>
+                  {selectedDate ? `Sessions on ${formatDate(selectedDate)}` : 'Recent Sessions'}
+                </Text>
+                <View style={styles.sessionCount}>
+                  <Text style={styles.sessionCountText}>
+                    {getFilteredSessions().length} {getFilteredSessions().length === 1 ? 'session' : 'sessions'}
+                  </Text>
+                </View>
+              </View>
             </>
           }
           ListEmptyComponent={renderEmptySessions}
@@ -345,6 +572,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
   );
 };
 
+// Add these new styles and update existing ones
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -482,34 +710,109 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 5,
   },
-  datesSection: {
+  // New calendar styles
+  calendarSection: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 15,
     marginBottom: 15,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  calendarTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  toggleCalendarButton: {
+    padding: 4,
+  },
+  calendarContainer: {
+    marginTop: 15,
+  },
+  calendar: {
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  calendarLegend: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 6,
+  },
+  legendText: {
+    fontSize: 11,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+  },
+  selectedDateInfo: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+  },
+  selectedDateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectedDateText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: '#333',
+    marginLeft: 8,
+    flex: 1,
+  },
+  clearDateButton: {
+    padding: 4,
+  },
+  selectedDateStats: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+    marginTop: 4,
+    marginLeft: 26,
+  },
+  sessionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 16,
     fontFamily: 'Poppins-Bold',
     color: '#333',
-    marginBottom: 10,
+    marginLeft: 8,
   },
-  datesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dateBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  sessionCount: {
     backgroundColor: '#E3F2FD',
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 15,
-    marginRight: 8,
-    marginBottom: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  dateText: {
+  sessionCountText: {
     fontSize: 12,
-    fontFamily: 'Poppins-Regular',
+    fontFamily: 'Poppins-Medium',
     color: '#3088C7',
-    marginLeft: 4,
   },
   sessionItem: {
     backgroundColor: '#FFF',
