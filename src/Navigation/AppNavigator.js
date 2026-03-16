@@ -1,16 +1,15 @@
-import { StyleSheet, Image, TouchableOpacity, View, Text } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import React from 'react';
-import { useState, useEffect,useCallback } from "react"
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { useState, useEffect } from "react"
+import { NavigationContainer} from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/Ionicons';
-import NetInfo, { useNetInfo } from '@react-native-community/netinfo';
+import NetInfo from '@react-native-community/netinfo';
 // Import all screens
 import SplashScreen from '../Screens/SplashScreen';
 import LoginScreen from '../Screens/LoginScreen';
 import OTPScreen from '../Screens/OTPScreen';
-import Home from '../Screens/Home';
 import ProfileScreen from '../Screens/ProfileScreen';
 import PersonalInfo from '../Screens/ProfileScreen/PersonalInfo';
 import BankDetails from '../Screens/ProfileScreen/BankDetails';
@@ -46,8 +45,11 @@ import ExperienceDetails from '../Screens/Document/ExperienceDetails';
 import ExperienceDetailsEdit from '../Screens/Document/ExperienceDetailsEdit';
 import DocumentScreen from '../Screens/ProfileScreen/DocumentScreen';
 import Attendanceshow from '../Screens/Attendanceshow';
-import AdminHome from '../Screens/Admin/AdminHome';
-import AdminAttendenceshow from '../Screens/Admin/AdminAttendenceshow';
+import AdminDashboard from '../Screens/Admin/AdminDashboard';
+import AdminHistory from '../Screens/Admin/AdminHistory';
+import AdminReport from '../Screens/Admin/AdminReport';
+import UserTrackingHistory from '../Screens/Admin/UserTrackingHistory';
+import SessionDetailMap from '../Screens/Admin/SessionDetailMap';
 import FullImageScreen from '../FullImageScreen';
 
 import { useAuth } from '../config/auth-context';
@@ -55,33 +57,17 @@ import AdminLeaveRequest from '../Screens/Admin/AdminLeaveRequest';
 import AdminLeaveDetails from '../Screens/Admin/AdminLeaveDetails';
 import AdminShiftRequest from '../Screens/Admin/AdminShiftRequest';
 import AdminLoanRequest from '../Screens/Admin/AdminLoanRequest';
-// import AdminRequestPage from '../Screens/AdminScreen/AdminRequestPage';
 import AdminRequestDetails from '../Screens/Admin/AdminRequestDetails';
 import AdminRequestPage from '../Screens/Admin/AdminRequestPage';
-import AttendenceTabPage from '../Screens/AttendenceTabPage';
-import Faceenrolled from './../Screens/Admin/Faceenrolled';
 import Faceregister from './../Screens/Admin/Faceregister';
 import EmployeeListScreen from './../Screens/Admin/EmployeeListScreen';
-import AdminRequest from './../Screens/Admin/AdminRequest';
 import AdminMarkAttendanceScreen from './../Screens/Admin/AdminMarkAttendanceScreen';
 import NoInternetScreen from '../Screens/Nointernet/NoInternetScreen';
 import AdminTotalEmployees from './../Screens/Admin/AdminTotalEmployees';
 import LocationTrackingScreen from '../Screens/Tracking/LocationTrackingScreen';
 import TrackingHistoryScreen from '../Screens/Tracking/TrackingHistoryScreen';
 import TrackingSessionDetailScreen from '../Screens/Tracking/TrackingSessionDetailScreen';
-
-// const NoInternetScreen = ({ onTryAgain }) => (
-//     <View style={styles.noInternetContainer}>
-//         <Icon name="cloud-offline-outline" size={80} color="#999" />
-//         <Text style={styles.noInternetTitle}>No Internet Connection</Text>
-//         <Text style={styles.noInternetText}>
-//             Please check your network settings and try again.
-//         </Text>
-//         <TouchableOpacity style={styles.noInternetButton} onPress={onTryAgain}>
-//             <Text style={styles.noInternetButtonText}>Try Again</Text>
-//         </TouchableOpacity>
-//     </View>
-// );
+import FontAwesome from 'react-native-vector-icons/FontAwesome';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -169,62 +155,39 @@ const AdminTabNavigator = () => {
             tabBarInactiveTintColor: '#999999',
         }}>
             <Tab.Screen
-                name="AdminHome"
-                component={AdminHome}
+                name="AdminDashboard"
+                component={AdminDashboard}
                 options={{
                     tabBarIcon: ({ color, size }) => (
                         <Icon name="home" color={color} size={size} />
                     ),
-                    title: "Home",
+                    title: "Dashboard",
                     headerShown: false,
                 }}
             />
             <Tab.Screen
-                name="AdminRequest"
-                component={AdminRequest}
+                name="AdminHistory"
+                component={AdminHistory}
                 options={{
                     tabBarIcon: ({ color, size }) => (
-                        <Icon name="document-text-outline" color={color} size={size} />
+                            <FontAwesome name="users" color={color} size={size} />
                     ),
-                    title: "Request",
+                    title: "Users",
                     headerShown: false,
                 }}
             />
             <Tab.Screen
-                name="AdminAttendenceshow"
-                component={AdminAttendenceshow}
+                name="AdminReport"
+                component={AdminReport}
                 options={{
                     tabBarIcon: ({ color, size }) => (
-                        <Icon name="list" color={color} size={size} />
+                        <Icon name="document" color={color} size={size} />
                     ),
-                    title: "Attendance",
-                    headerShown: true,
-                    headerTitleAlign: "center",
-                    headerTitleStyle: {
-                        fontWeight: '600',
-                        fontSize: 18,
-                        color: '#000',
-                    },
+                    title: "Reports",
+                    headerShown: false,
                 }}
             />
-              <Tab.Screen
-                name="Faceenrolled"
-                component={Faceenrolled}
-                options={{
-                    tabBarIcon: ({ color, size }) => (
-                        <Icon name="person-circle-outline" color={color} size={size} />
-                    ),
-                    title: "Faceenrolled",
-                    headerShown: true,
-                    headerTitleAlign: "center",
-                    headerTitleStyle: {
-                        fontWeight: '600',
-                        fontSize: 18,
-                        color: '#000',
-                    },
-                }}
-            />
-              <Tab.Screen
+            <Tab.Screen
                 name="ProfileTab"
                 component={ProfileScreen}
                 options={{
@@ -310,6 +273,11 @@ const AuthenticatedStack = ({ route }) => {
             <Stack.Screen name="Logout" component={Logout} />
 
             {/* Admin stack */}
+            <Stack.Screen name="AdminDashboard" component={AdminDashboard} options={(props) => commonScreenOptions({ ...props, title: 'Admin Dashboard' })} />
+            <Stack.Screen name="AdminHistory" component={AdminHistory} options={(props) => commonScreenOptions({ ...props, title: 'History' })} />
+            <Stack.Screen name="UserTrackingHistory" component={UserTrackingHistory} options={(props) => commonScreenOptions({ ...props, title: 'User Tracking' })} />
+            <Stack.Screen name="SessionDetailMap" component={SessionDetailMap} options={(props) => commonScreenOptions({ ...props, title: 'Session Details' })} />
+            <Stack.Screen name="AdminReport" component={AdminReport} options={(props) => commonScreenOptions({ ...props, title: 'Report' })} />
             <Stack.Screen name="AdminLeaveRequest" component={AdminLeaveRequest} options={(props) => commonScreenOptions({ ...props, title: 'Leave Request ' })} />
             <Stack.Screen name="AdminTotalEmployees" component={AdminTotalEmployees} options={(props) => commonScreenOptions({ ...props, title: 'Total Employees ' })} />
             <Stack.Screen name="AdminLeaveDetails" component={AdminLeaveDetails} options={(props) => commonScreenOptions({ ...props, title: 'Leave Details ' })} />

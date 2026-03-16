@@ -3,13 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Dimensions,
   Image,
-  Modal,
   Platform,
   FlatList,
 } from 'react-native';
@@ -24,29 +21,6 @@ import Api from '../../config/Api';
 import CustomHeader from '../../Component/CustomHeader';
 
 const { width } = Dimensions.get('window');
-
-const formatDate = (iso) => {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-};
-
-const formatDuration = (seconds) => {
-  if (seconds == null) return '—';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(h)}:${pad(m)}:${pad(s)}`;
-};
-
-const formatDistance = (meters) => {
-  if (meters == null) return '—';
-  if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`;
-  return `${Math.round(meters)} m`;
-};
 
 // Simple haversine-distance helper (meters)
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -187,13 +161,9 @@ const TrackingSessionDetailScreen = () => {
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertConfig, setAlertConfig] = useState({ title: '', message: '', type: 'error' });
-  const [fullScreenMapVisible, setFullScreenMapVisible] = useState(false);
   const mapRef = React.useRef(null);
-  const fullScreenMapRef = React.useRef(null);
-  const mapRegionRef = React.useRef(null);
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -254,37 +224,6 @@ const TrackingSessionDetailScreen = () => {
   useEffect(() => {
     load();
   }, [load]);
-
-  const handleDelete = useCallback(() => {
-    Alert.alert(
-      'Delete Session',
-      'Are you sure you want to delete this tracking session?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await TrackingService.deleteSession(sessionId);
-              navigation.goBack();
-            } catch (e) {
-              console.error('deleteSession failed:', e);
-              setAlertConfig({
-                title: 'Error',
-                message: e?.message || 'Failed to delete session.',
-                type: 'error',
-              });
-              setAlertVisible(true);
-            } finally {
-              setDeleting(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [sessionId, navigation]);
 
   const locations = detail?.locations ?? [];
 
@@ -760,50 +699,49 @@ const styles = StyleSheet.create({
   photoCarouselContent: {
     paddingHorizontal: wp(2),
   },
-  photoCard: {
-    width: wp(60),
-    marginHorizontal: wp(1),
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  photoCardImage: {
-    width: '100%',
-    height: hp(18),
-    backgroundColor: '#f3f4f6',
-  },
-  photoCardInfo: {
-    paddingHorizontal: wp(3),
-    paddingVertical: hp(1),
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  photoCardLabelTitle: {
-    fontSize: wp(3.4),
-    fontWeight: '600',
-    color: '#111827',
-  },
-  photoCardLabelValue: {
-    fontSize: wp(3.4),
-    color: '#4b5563',
-  },
-  photoAvatarWrap: {
-    width: wp(18),
-    height: wp(18),
-    borderRadius: wp(9),
-    overflow: 'hidden',
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // =============
+photoCard: {
+  width: wp(40),               // smaller square card
+  backgroundColor: '#ffffff',
+  // borderRadius: 16,            // rounded corners
+  paddingVertical: hp(2),      // space inside top/bottom
+  alignItems: 'center',        // center items horizontally
+  marginHorizontal: wp(2),     // horizontal gap between cards
+  marginVertical: hp(3),       
+  // shadowColor: '#000',
+  // shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 3,
+},
+
+photoCardImage: {
+  width: wp(18),               // circular image
+  height: wp(18),
+  borderRadius: wp(9),         // half of width for perfect circle
+  backgroundColor: '#f3f4f6',
+  overflow: 'hidden',
+  marginBottom: hp(1.5),       // space between image and text
+},
+
+photoCardInfo: {
+  alignItems: 'center',        // center text horizontally
+},
+
+photoCardLabelTitle: {
+  fontSize: wp(3),
+  fontWeight: '600',
+  color: '#111827',
+  textAlign: 'center',
+},
+
+photoCardLabelValue: {
+  fontSize: wp(3),
+  color: '#4b5563',
+  textAlign: 'center',
+  marginTop: hp(0.5),          // small gap under title
+},
+// 
   photoAvatar: {
     width: '100%',
     height: '100%',

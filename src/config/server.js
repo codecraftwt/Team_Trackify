@@ -1,5 +1,6 @@
 // const BASE_URL = 'http://180.179.21.98:8082/api';
-const BASE_URL = 'https://trackingapp-backend-6ny6.onrender.com';
+// const BASE_URL = 'https://trackingapp-backend-6ny6.onrender.com';
+const BASE_URL = 'http://10.0.2.2:5000';
 
 export default BASE_URL;
 
