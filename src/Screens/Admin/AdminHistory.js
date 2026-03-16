@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../config/auth-context';
-import { getAdminUsers } from '../../config/AdminService';
+import { getAdminUsers } from '../../config/AdminService'; 
 
 const AdminHistory = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');

@@ -472,6 +472,105 @@ export const getAdminAllTracks = async (adminId, startDate, endDate) => {
   }
 };
 
+/**
+ * Get user stats for admin dashboard
+ * @param {string} adminId - The admin's ID
+ * @returns {Promise<{success: boolean, data: any, message: string}>}
+ */
+export const getUserStats = async (adminId) => {
+  try {
+    console.log("Admin ID for user stats =====>", adminId);
+
+    // Get the auth token
+    const token = await AsyncStorage.getItem('authToken');
+    console.log("Auth Token from dashboard =====>", token ? "Token exists" : "No token found");
+    
+    if (!token) {
+      console.error("No authentication token found");
+      return {
+        success: false,
+        data: null,
+        message: 'Authentication token not found'
+      };
+    }
+
+    // Log token preview for debugging (first 20 chars)
+    console.log("Token preview:", token.substring(0, 20) + "...");
+
+    // Ensure token is properly formatted (remove any quotes if present)
+    const cleanToken = token.replace(/['"]+/g, '');
+    
+    const response = await fetch(`${BASE_URL}/api/Tracking/admin/${adminId}/users/stats`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': cleanToken.startsWith('Bearer ') ? cleanToken : `Bearer ${cleanToken}`,
+      },
+    });
+
+    console.log("User Stats API Status =====>", response.status);
+    console.log("Response Headers:", JSON.stringify(response.headers));
+
+    // Check if response status is 401 (Unauthorized)
+    if (response.status === 401) {
+      console.error("Unauthorized access - Token might be invalid or expired");
+      
+      // Clear invalid token
+      await AsyncStorage.removeItem('authToken');
+      
+      return {
+        success: false,
+        data: null,
+        message: 'Session expired. Please login again.',
+        unauthorized: true
+      };
+    }
+
+    const text = await response.text();
+    console.log("User Stats Raw API Response =====>", text);
+
+    if (!text) {
+      return {
+        success: false,
+        data: null,
+        message: 'Empty response from server'
+      };
+    }
+
+    const result = JSON.parse(text);
+
+    console.log("User Stats Parsed Result =====>", result);
+
+    if (response.ok) {
+      console.log("User Stats Data =====>", result);
+
+      return {
+        success: true,
+        data: result,
+        message: result.message || 'User stats fetched successfully'
+      };
+    } else {
+      console.log("User Stats API Error Message =====>", result.message);
+
+      return {
+        success: false,
+        data: null,
+        message: result.message || 'Failed to fetch user stats',
+        status: response.status
+      };
+    }
+
+  } catch (error) {
+    console.error('AdminService Error fetching user stats =====>', error);
+
+    return {
+      success: false,
+      data: null,
+      message: error.message || 'Something went wrong'
+    };
+  }
+};
+
 // Don't forget to export it
 export default {
   getAdminUsers,
@@ -480,4 +579,5 @@ export default {
   getUserSessions,
   getUserSessionDates,
   getAdminAllTracks,
+  getUserStats, // Add this
 };
