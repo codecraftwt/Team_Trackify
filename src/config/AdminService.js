@@ -396,7 +396,7 @@ export const getUserSessionDates = async (userId) => {
 
 /**
  * Get all tracking tracks for admin within a date range
- * @param {string} adminId - The admin's ID
+ * @param {string} adminId - The admin ID
  * @param {string} startDate - Start date in YYYY-MM-DD format
  * @param {string} endDate - End date in YYYY-MM-DD format
  * @returns {Promise<{success: boolean, data: any, message: string}>}
