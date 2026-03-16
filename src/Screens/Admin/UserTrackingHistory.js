@@ -16,17 +16,17 @@
 // const UserTrackingHistory = ({ navigation, route }) => {
 //   // Extract params: userId is the selected user's ID, adminId is the admin's ID
 //   const { userId, adminId, userName } = route.params || {};
-  
+
 //   console.log('🔵 UserTrackingHistory - Route params:', route.params);
 //   console.log('🔵 UserTrackingHistory - Selected User ID:', userId);
 //   console.log('🔵 UserTrackingHistory - Admin ID:', adminId);
-  
+
 //   // Get today's date in YYYY-MM-DD format
 //   const getTodayDate = () => {
 //     const today = new Date();
 //     return today.toISOString().split('T')[0];
 //   };
-  
+
 //   const [trackingData, setTrackingData] = useState(null);
 //   const [isLoading, setIsLoading] = useState(true);
 //   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -70,14 +70,14 @@
 
 //   //     // Use provided date or selectedDate (defaults to today)
 //   //     const queryDate = date || selectedDate || getTodayDate();
-      
+
 //   //     console.log('🔍 Fetching sessions for date:', {
 //   //       queryDate,
 //   //       selectedDateState: selectedDate,
 //   //       providedDate: date,
 //   //       userId
 //   //     });
-      
+
 //   //     const response = await getUserSessions(userId, queryDate);
 //   //     console.log('📥 getUserSessions response:', {
 //   //       success: response.success,
@@ -121,14 +121,14 @@
 
 //     // Use provided date or selectedDate (defaults to today)
 //     const queryDate = date || selectedDate || getTodayDate();
-    
+
 //     console.log('🔍 Fetching sessions for date:', {
 //       queryDate,
 //       selectedDateState: selectedDate,
 //       providedDate: date,
 //       userId
 //     });
-    
+
 //     const response = await getUserSessions(userId, queryDate);
 //     console.log('📥 getUserSessions response:', {
 //       success: response.success,
@@ -161,9 +161,9 @@
 //   //       console.error('❌ Cannot fetch session dates: userId missing');
 //   //       return;
 //   //     }
-      
+
 //   //     console.log('🔍 Fetching all session dates for user:', userId);
-      
+
 //   //     const response = await getUserSessionDates(userId);
 //   //     console.log('📥 getUserSessionDates response:', {
 //   //       success: response.success,
@@ -189,9 +189,9 @@
 //       console.error('❌ Cannot fetch session dates: userId missing');
 //       return;
 //     }
-    
+
 //     console.log('🔍 Fetching all session dates for user:', userId);
-    
+
 //     const response = await getUserSessionDates(userId);
 //     console.log('📥 getUserSessionDates response:', {
 //       success: response.success,
@@ -218,9 +218,9 @@
 //       selectedDate,
 //       datesCount: datesWithSessions.length
 //     });
-    
+
 //     const marks = {};
-    
+
 //     // Mark all dates that have sessions with dots
 //     datesWithSessions.forEach(date => {
 //       marks[date] = {
@@ -234,7 +234,7 @@
 //         marked: true,
 //       };
 //     });
-    
+
 //     // Add selected date marking (highlight in blue)
 //     if (selectedDate) {
 //       marks[selectedDate] = {
@@ -243,7 +243,7 @@
 //         selectedColor: '#3088C7',
 //       };
 //     }
-    
+
 //     // Mark today's date with a green dot
 //     const today = getTodayDate();
 //     if (marks[today]) {
@@ -271,7 +271,7 @@
 //         ],
 //       };
 //     }
-    
+
 //     console.log('✅ Final markedDates:', marks);
 //     setMarkedDates(marks);
 //   }, [datesWithSessions, selectedDate]);
@@ -281,7 +281,7 @@
 //   //   const today = getTodayDate();
 //   //   console.log('🚀 Initial load - setting selectedDate to today:', today);
 //   //   setSelectedDate(today);
-    
+
 //   //   // Fetch both data in parallel
 //   //   const loadInitialData = async () => {
 //   //     console.log('⏳ Starting initial data load');
@@ -300,9 +300,9 @@
 //   //       setIsLoading(false);
 //   //     }
 //   //   };
-    
+
 //   //   loadInitialData();
-    
+
 //   //   // Set header title
 //   //   if (userName) {
 //   //     console.log('📝 Setting header title:', `${userName}'s Tracking`);
@@ -314,7 +314,7 @@
 //   const today = getTodayDate();
 //   console.log('🚀 Initial load - setting selectedDate to today:', today);
 //   setSelectedDate(today);
-  
+
 //   // Fetch both data in parallel
 //   const loadInitialData = async () => {
 //     console.log('⏳ Starting initial data load');
@@ -333,15 +333,15 @@
 //       setIsLoading(false);
 //     }
 //   };
-  
+
 //   loadInitialData();
-  
+
 //   // Set header title
 //   if (userName) {
 //     console.log('📝 Setting header title:', `${userName}'s Tracking`);
 //     navigation.setOptions({ title: `${userName}'s Tracking` });
 //   }
-  
+
 //   // eslint-disable-next-line react-hooks/exhaustive-deps
 // }, []); // Empty dependency array - this should only run once on mount
 
@@ -364,7 +364,7 @@
 //     const hours = Math.floor(seconds / 3600);
 //     const minutes = Math.floor((seconds % 3600) / 60);
 //     const secs = seconds % 60;
-    
+
 //     if (hours > 0) {
 //       return `${hours}h ${minutes}m`;
 //     } else if (minutes > 0) {
@@ -412,11 +412,11 @@
 //       dateString: day.dateString,
 //       previousSelectedDate: selectedDate
 //     });
-    
+
 //     // Update selected date state
 //     setSelectedDate(day.dateString);
 //     setCalendarVisible(false);
-    
+
 //     // Fetch sessions for selected date
 //     console.log('🔍 Triggering fetch for new date:', day.dateString);
 //     fetchUserSessions(true, day.dateString);
@@ -425,7 +425,7 @@
 //   // Render stats card based on current sessions
 //   const renderStatsCard = () => {
 //     const sessions = trackingData?.sessions || [];
-    
+
 //     // Calculate stats from sessions
 //     const totalSessions = sessions.length;
 //     const totalDistance = sessions.reduce((sum, s) => sum + (s.totalDistance || 0), 0);
@@ -557,7 +557,7 @@
 //   // Render enhanced calendar with dots
 //   const renderCalendarWithDots = () => {
 //     const sessionCount = getSessionCountForDate();
-    
+
 //     return (
 //       <View style={styles.calendarSection}>
 //         <View style={styles.calendarHeader}>
@@ -615,7 +615,7 @@
 //                 />
 //               )}
 //             />
-            
+
 //             {/* Calendar Legend */}
 //             <View style={styles.calendarLegend}>
 //               <View style={styles.legendItem}>
@@ -679,7 +679,7 @@
 //   return (
 //     <View style={styles.container}>
 //       <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
-      
+
 //       {/* Error State */}
 //       {error && (
 //         <View style={styles.errorContainer}>
@@ -709,13 +709,13 @@
 //             <>
 //               {/* User Info Card */}
 //               {renderUserInfoCard()}
-              
+
 //               {/* Stats Card */}
 //               {renderStatsCard()}
-              
+
 //               {/* Calendar with Dots */}
 //               {renderCalendarWithDots()}
-              
+
 //               {/* Sessions Header */}
 //               <View style={styles.sessionsHeader}>
 //                 <Text style={styles.sectionTitle}>
@@ -1095,13 +1095,13 @@ import CustomHeader from '../../Component/CustomHeader';
 const UserTrackingHistory = ({ navigation, route }) => {
   // Extract params: userId is the selected user's ID, adminId is the admin's ID
   const { userId, adminId, userName } = route.params || {};
-  
+
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
     const today = new Date();
     return today.toISOString().split('T')[0];
   };
-  
+
   const [trackingData, setTrackingData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1140,7 +1140,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
 
       // Use provided date or selectedDate (defaults to today)
       const queryDate = date || selectedDate || getTodayDate();
-      
+
       const response = await getUserSessions(userId, queryDate);
       if (response.success && response.data) {
         setTrackingData(response.data);
@@ -1164,7 +1164,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
         console.error('❌ Cannot fetch session dates: userId missing');
         return;
       }
-      
+
       const response = await getUserSessionDates(userId);
 
       if (response.success && response.data) {
@@ -1180,7 +1180,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
   // Update marked dates when datesWithSessions or selectedDate changes
   useEffect(() => {
     const marks = {};
-    
+
     // Mark all dates that have sessions with dots
     datesWithSessions.forEach(date => {
       marks[date] = {
@@ -1194,7 +1194,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
         marked: true,
       };
     });
-    
+
     // Add selected date marking (highlight in blue)
     if (selectedDate) {
       marks[selectedDate] = {
@@ -1203,7 +1203,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
         selectedColor: '#3088C7',
       };
     }
-    
+
     // Mark today's date with a green dot
     const today = getTodayDate();
     if (marks[today]) {
@@ -1238,7 +1238,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
   useEffect(() => {
     const today = getTodayDate();
     setSelectedDate(today);
-    
+
     // Fetch both data in parallel
     const loadInitialData = async () => {
       setIsLoading(true);
@@ -1253,9 +1253,9 @@ const UserTrackingHistory = ({ navigation, route }) => {
         setIsLoading(false);
       }
     };
-    
+
     loadInitialData();
-    
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1277,7 +1277,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes}m`;
     } else if (minutes > 0) {
@@ -1324,7 +1324,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
     // Update selected date state
     setSelectedDate(day.dateString);
     setCalendarVisible(false);
-    
+
     // Fetch sessions for selected date
     fetchUserSessions(true, day.dateString);
   };
@@ -1335,14 +1335,56 @@ const UserTrackingHistory = ({ navigation, route }) => {
   };
 
   // Render stats card based on current sessions
+  // const renderStatsCard = () => {
+  //   const sessions = trackingData?.sessions || [];
+
+  //   // Calculate stats from sessions
+  //   const totalSessions = sessions.length;
+  //   const totalDistance = sessions.reduce((sum, s) => sum + (s.totalDistance || 0), 0);
+  //   const totalDuration = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+  //   const averageDistance = totalSessions > 0 ? totalDistance / totalSessions : 0;
+
+  //   return (
+  //     <View style={styles.statsCardContainer}>
+  //       <View style={styles.statsRow}>
+  //         <View style={styles.statItem}>
+  //           <Icon name="access-time" size={24} color="#3088C7" />
+  //           <Text style={styles.statValue}>{totalSessions}</Text>
+  //           <Text style={styles.statLabel}>Sessions</Text>
+  //         </View>
+  //         <View style={styles.statItem}>
+  //           <Icon name="straighten" size={24} color="#3088C7" />
+  //           <Text style={styles.statValue}>{formatDistance(totalDistance)}</Text>
+  //           <Text style={styles.statLabel}>Distance</Text>
+  //         </View>
+  //         <View style={styles.statItem}>
+  //           <Icon name="timer" size={24} color="#3088C7" />
+  //           <Text style={styles.statValue}>{formatDuration(totalDuration)}</Text>
+  //           <Text style={styles.statLabel}>Duration</Text>
+  //         </View>
+  //       </View>
+  //       <View style={styles.statsRow}>
+  //         <View style={styles.statItem}>
+  //           <Icon name="speed" size={24} color="#3088C7" />
+  //           <Text style={styles.statValue}>{formatDistance(averageDistance)}</Text>
+  //           <Text style={styles.statLabel}>Avg Distance</Text>
+  //         </View>
+  //       </View>
+  //     </View>
+  //   );
+  // };
   const renderStatsCard = () => {
-    const sessions = trackingData?.sessions || [];
-    
-    // Calculate stats from sessions
-    const totalSessions = sessions.length;
-    const totalDistance = sessions.reduce((sum, s) => sum + (s.totalDistance || 0), 0);
-    const totalDuration = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
-    const averageDistance = totalSessions > 0 ? totalDistance / totalSessions : 0;
+    // Get the displayedTotalDistance from pageStats if available
+    const displayedDistance = trackingData?.pageStats?.displayedDistanceDisplay ||
+      trackingData?.pageStats?.displayedTotalDistance ||
+      0;
+
+    // Format the distance if it's a number and not already formatted
+    const distanceText = trackingData?.pageStats?.displayedDistanceDisplay ||
+      (typeof displayedDistance === 'number' ? formatDistance(displayedDistance) : displayedDistance);
+
+    const totalSessions = trackingData?.pageStats?.displayedSessions ||
+      (trackingData?.sessions || []).length;
 
     return (
       <View style={styles.statsCardContainer}>
@@ -1354,20 +1396,8 @@ const UserTrackingHistory = ({ navigation, route }) => {
           </View>
           <View style={styles.statItem}>
             <Icon name="straighten" size={24} color="#3088C7" />
-            <Text style={styles.statValue}>{formatDistance(totalDistance)}</Text>
+            <Text style={styles.statValue}>{distanceText}</Text>
             <Text style={styles.statLabel}>Distance</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Icon name="timer" size={24} color="#3088C7" />
-            <Text style={styles.statValue}>{formatDuration(totalDuration)}</Text>
-            <Text style={styles.statLabel}>Duration</Text>
-          </View>
-        </View>
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Icon name="speed" size={24} color="#3088C7" />
-            <Text style={styles.statValue}>{formatDistance(averageDistance)}</Text>
-            <Text style={styles.statLabel}>Avg Distance</Text>
           </View>
         </View>
       </View>
@@ -1376,14 +1406,14 @@ const UserTrackingHistory = ({ navigation, route }) => {
 
   // Render session item
   const renderSessionItem = ({ item, index }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.sessionItem}
       onPress={() => {
         console.log('👉 Session item pressed:', {
           sessionId: item.sessionId,
           date: item.startTime
         });
-        navigation.navigate('SessionDetailMap', { 
+        navigation.navigate('SessionDetailMap', {
           userId: userId,
           sessionId: item.sessionId,
           sessionDate: item.startTime,
@@ -1443,13 +1473,13 @@ const UserTrackingHistory = ({ navigation, route }) => {
   // Render calendar popup
   const renderCalendarPopup = () => {
     if (!calendarVisible) return null;
-    
+
     return (
       <View style={styles.calendarPopupContainer}>
         <View style={styles.calendarPopup}>
           <View style={styles.calendarHeader}>
             <Text style={styles.calendarTitle}>Select Date</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setCalendarVisible(false)}
               style={styles.closeButton}
             >
@@ -1482,14 +1512,14 @@ const UserTrackingHistory = ({ navigation, route }) => {
             }}
             style={styles.calendar}
             renderArrow={(direction) => (
-              <Icon 
-                name={`chevron-${direction}`} 
-                size={24} 
-                color="#3088C7" 
+              <Icon
+                name={`chevron-${direction}`}
+                size={24}
+                color="#3088C7"
               />
             )}
           />
-          
+
           {/* Calendar Legend */}
           <View style={styles.calendarLegend}>
             <View style={styles.legendItem}>
@@ -1529,7 +1559,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
-      
+
       {/* Custom Header with Back button, User Name, and Calendar */}
       <CustomHeader
         navigation={navigation}
@@ -1549,7 +1579,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
       {error && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.retryButton}
             onPress={() => {
               console.log('👆 Retry pressed for date:', selectedDate);

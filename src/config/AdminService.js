@@ -394,11 +394,90 @@ export const getUserSessionDates = async (userId) => {
   }
 };
 
+/**
+ * Get all tracking tracks for admin within a date range
+ * @param {string} adminId - The admin's ID
+ * @param {string} startDate - Start date in YYYY-MM-DD format
+ * @param {string} endDate - End date in YYYY-MM-DD format
+ * @returns {Promise<{success: boolean, data: any, message: string}>}
+ */
+export const getAdminAllTracks = async (adminId, startDate, endDate) => {
+  try {
+    console.log("Admin ID =====>", adminId);
+    console.log("Start Date =====>", startDate);
+    console.log("End Date =====>", endDate);
+
+    // Get the auth token
+    const token = await AsyncStorage.getItem('authToken');
+
+    if (!token) {
+      return {
+        success: false,
+        data: null,
+        message: 'Authentication token not found'
+      };
+    }
+
+    const response = await fetch(`${BASE_URL}/api/Tracking/admin/${adminId}/all-tracks?startDate=${startDate}&endDate=${endDate}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token,
+      },
+    });
+
+    console.log("API Status =====>", response.status);
+
+    const text = await response.text();
+    console.log("Raw API Response =====>", text);
+
+    if (!text) {
+      return {
+        success: false,
+        data: null,
+        message: 'Empty response from server'
+      };
+    }
+
+    const result = JSON.parse(text);
+
+    console.log("Parsed Result =====>", result);
+
+    if (response.ok) {
+      console.log("Admin All Tracks Data =====>", result);
+
+      return {
+        success: true,
+        data: result,
+        message: result.message || 'Admin tracks fetched successfully'
+      };
+    } else {
+      console.log("API Error Message =====>", result.message);
+
+      return {
+        success: false,
+        data: null,
+        message: result.message || 'Failed to fetch admin tracks'
+      };
+    }
+
+  } catch (error) {
+    console.error('AdminService Error fetching admin all tracks =====>', error);
+
+    return {
+      success: false,
+      data: null,
+      message: error.message || 'Something went wrong'
+    };
+  }
+};
+
 // Don't forget to export it
 export default {
   getAdminUsers,
   getUserTrackingSummary,
   getSessionDetails,
   getUserSessions,
-  getUserSessionDates, // Add this
+  getUserSessionDates,
+  getAdminAllTracks,
 };

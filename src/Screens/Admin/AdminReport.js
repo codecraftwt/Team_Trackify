@@ -1,136 +1,293 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   StatusBar,
+  TouchableOpacity,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-
-// Static data for admin reports
-const STATIC_REPORT_DATA = {
-  overview: {
-    totalEmployees: 150,
-    activeEmployees: 120,
-    totalDepartments: 5,
-    averageAttendance: '87%',
-  },
-  attendanceReport: {
-    present: 105,
-    absent: 30,
-    onLeave: 15,
-    late: 12,
-    halfDay: 8,
-  },
-  departmentWiseAttendance: [
-    { name: 'Engineering', present: 45, absent: 5, percentage: 90 },
-    { name: 'Sales', present: 32, absent: 8, percentage: 80 },
-    { name: 'Marketing', present: 22, absent: 3, percentage: 88 },
-    { name: 'HR', present: 14, absent: 1, percentage: 93 },
-    { name: 'Finance', present: 12, absent: 3, percentage: 80 },
-  ],
-  leaveReport: [
-    { type: 'Sick Leave', taken: 12, remaining: 8, total: 20 },
-    { type: 'Casual Leave', taken: 10, remaining: 10, total: 20 },
-    { type: 'Earned Leave', taken: 5, remaining: 15, total: 20 },
-    { type: ' maternity Leave', taken: 0, remaining: 90, total: 90 },
-    { type: 'Paternity Leave', taken: 0, remaining: 7, total: 7 },
-  ],
-  monthlyPerformance: [
-    { month: 'Jan', performance: 85, target: 90 },
-    { month: 'Feb', performance: 88, target: 90 },
-    { month: 'Mar', performance: 92, target: 90 },
-  ],
-  pendingTasks: [
-    { id: 1, task: 'Leave approvals', count: 8, priority: 'high', icon: 'event-available', color: '#FF9800' },
-    { id: 2, task: 'Loan requests', count: 5, priority: 'medium', icon: 'account-balance', color: '#2196F3' },
-    { id: 3, task: 'Expense claims', count: 12, priority: 'high', icon: 'receipt', color: '#E91E63' },
-    { id: 4, task: 'Shift changes', count: 3, priority: 'low', icon: 'schedule', color: '#9C27B0' },
-  ],
-};
+import { Calendar } from 'react-native-calendars';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import CustomHeader from '../../Component/CustomHeader';
+import { getAdminAllTracks } from '../../config/AdminService';
 
 const AdminReport = ({ navigation }) => {
-  const renderStatCard = (title, value, subtitle, icon, color) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <View style={styles.statContent}>
-        <Text style={styles.statValue}>{value}</Text>
-        <Text style={styles.statTitle}>{title}</Text>
-        <Text style={styles.statSubtitle}>{subtitle}</Text>
-      </View>
-      <View style={[styles.statIconContainer, { backgroundColor: color + '20' }]}>
-        <Icon name={icon} size={24} color={color} />
-      </View>
-    </View>
-  );
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
+  const [showFromCalendar, setShowFromCalendar] = useState(false);
+  const [showToCalendar, setShowToCalendar] = useState(false);
+  const [filteredData, setFilteredData] = useState([]);
+  const [showResults, setShowResults] = useState(false);
+  const [markedDates, setMarkedDates] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [adminId, setAdminId] = useState(null);
+  const [error, setError] = useState(null);
+  const [isLoadingAdminId, setIsLoadingAdminId] = useState(true);
 
-  const renderDepartmentRow = (dept) => (
-    <View key={dept.name} style={styles.departmentRow}>
-      <View style={styles.departmentInfo}>
-        <Text style={styles.departmentName}>{dept.name}</Text>
-        <Text style={styles.departmentCount}>
-          {dept.present} present / {dept.absent} absent
-        </Text>
-      </View>
-      <View style={styles.percentageContainer}>
-        <Text style={[
-          styles.percentageText,
-          { color: dept.percentage >= 85 ? '#4CAF50' : dept.percentage >= 70 ? '#FF9800' : '#F44336' }
-        ]}>
-          {dept.percentage}%
-        </Text>
-        <View style={styles.progressBar}>
-          <View 
-            style={[
-              styles.progressFill, 
-              { 
-                width: `${dept.percentage}%`,
-                backgroundColor: dept.percentage >= 85 ? '#4CAF50' : dept.percentage >= 70 ? '#FF9800' : '#F44336'
+  // Get adminId from AsyncStorage on component mount
+  useEffect(() => {
+    const getAdminId = async () => {
+      try {
+        // For admin, the userId in AsyncStorage is the admin's ID
+        const id = await AsyncStorage.getItem('userId');
+        if (id) {
+          setAdminId(id);
+          console.log('Admin ID retrieved:', id);
+        } else {
+          console.log('No admin ID found in AsyncStorage');
+          setError('Admin ID not found. Please log in again.');
+        }
+      } catch (err) {
+        console.error('Error getting adminId:', err);
+        setError('Error retrieving admin ID');
+      } finally {
+        setIsLoadingAdminId(false);
+      }
+    };
+    getAdminId();
+  }, []);
+
+  // Format date for display
+  const formatDisplayDate = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const month = date.toLocaleString('default', { month: 'short' });
+    const day = date.getDate();
+    const year = date.getFullYear();
+    return `${month} ${day}, ${year}`;
+  };
+
+  // Handle from date selection
+  const handleFromDateSelect = (date) => {
+    setFromDate(date.dateString);
+    setShowFromCalendar(false);
+    
+    // Update marked dates
+    const newMarkedDates = {};
+    if (date.dateString) {
+      newMarkedDates[date.dateString] = {
+        selected: true,
+        selectedColor: '#3088C7',
+        startingDay: true,
+        color: '#3088C7',
+      };
+    }
+    if (toDate) {
+      newMarkedDates[toDate] = {
+        ...newMarkedDates[toDate],
+        selected: true,
+        selectedColor: '#3088C7',
+        endingDay: true,
+        color: '#3088C7',
+      };
+      
+      // Mark dates in between
+      const start = new Date(date.dateString);
+      const end = new Date(toDate);
+      if (start <= end) {
+        const currentDate = new Date(start);
+        currentDate.setDate(currentDate.getDate() + 1);
+        
+        while (currentDate < end) {
+          const dateStr = currentDate.toISOString().split('T')[0];
+          newMarkedDates[dateStr] = {
+            selected: true,
+            color: '#3088C7',
+            opacity: 0.3,
+          };
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      }
+    }
+    setMarkedDates(newMarkedDates);
+  };
+
+  // Handle to date selection
+  const handleToDateSelect = (date) => {
+    setToDate(date.dateString);
+    setShowToCalendar(false);
+    
+    // Update marked dates
+    const newMarkedDates = {};
+    if (fromDate) {
+      newMarkedDates[fromDate] = {
+        selected: true,
+        selectedColor: '#3088C7',
+        startingDay: true,
+        color: '#3088C7',
+      };
+    }
+    if (date.dateString) {
+      newMarkedDates[date.dateString] = {
+        selected: true,
+        selectedColor: '#3088C7',
+        endingDay: true,
+        color: '#3088C7',
+      };
+    }
+    
+    // Mark dates in between
+    if (fromDate && date.dateString) {
+      const start = new Date(fromDate);
+      const end = new Date(date.dateString);
+      if (start <= end) {
+        const currentDate = new Date(start);
+        currentDate.setDate(currentDate.getDate() + 1);
+        
+        while (currentDate < end) {
+          const dateStr = currentDate.toISOString().split('T')[0];
+          newMarkedDates[dateStr] = {
+            selected: true,
+            color: '#3088C7',
+            opacity: 0.3,
+          };
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      }
+    }
+    setMarkedDates(newMarkedDates);
+  };
+
+  const handleApplyFilters = async () => {
+    console.log('Apply button clicked - fromDate:', fromDate, 'toDate:', toDate, 'adminId:', adminId);
+    
+    if (fromDate && toDate && adminId) {
+      const start = new Date(fromDate);
+      const end = new Date(toDate);
+      
+      if (start <= end) {
+        setLoading(true);
+        setError(null);
+        
+        console.log('Calling API with adminId:', adminId, 'startDate:', fromDate, 'endDate:', toDate);
+        
+        const result = await getAdminAllTracks(adminId, fromDate, toDate);
+        
+        console.log('API result:', result);
+        
+        setLoading(false);
+        
+        if (result.success) {
+          setFilteredData(result.data.dateWiseData || []);
+          setSummary(result.data.summary || null);
+          setShowResults(true);
+        } else {
+          setError(result.message || 'Failed to fetch data');
+          setShowResults(true);
+          setFilteredData([]);
+        }
+      } else {
+        setError('Invalid date range');
+        setShowResults(true);
+      }
+    } else {
+      console.log('Missing required params - fromDate:', fromDate, 'toDate:', toDate, 'adminId:', adminId);
+      if (!adminId) {
+        setError('Admin ID not found. Please log in again.');
+        setShowResults(true);
+      }
+    }
+  };
+
+  const handleClearFilter = () => {
+    setFromDate(null);
+    setToDate(null);
+    setShowResults(false);
+    setFilteredData([]);
+    setMarkedDates({});
+    setSummary(null);
+    setError(null);
+  };
+
+  // Get current month for calendar
+  const getCurrentMonth = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
+  };
+
+  const getCurrentMonthEnd = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+    return `${year}-${month}-${lastDay}`;
+  };
+
+  const renderCalendarModal = (isFromCalendar) => (
+    <Modal
+      visible={isFromCalendar ? showFromCalendar : showToCalendar}
+      transparent
+      animationType="slide"
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>
+            Select {isFromCalendar ? 'From' : 'To'} Date
+          </Text>
+          
+          <Calendar
+            current={getCurrentMonth()}
+            minDate={getCurrentMonth()}
+            maxDate={getCurrentMonthEnd()}
+            onDayPress={isFromCalendar ? handleFromDateSelect : handleToDateSelect}
+            markedDates={markedDates}
+            markingType={'period'}
+            theme={{
+              selectedDayBackgroundColor: '#3088C7',
+              todayTextColor: '#3088C7',
+              arrowColor: '#3088C7',
+              monthTextColor: '#333',
+              textMonthFontFamily: 'Poppins-Bold',
+              textDayFontFamily: 'Poppins-Regular',
+              textDayHeaderFontFamily: 'Poppins-Medium',
+            }}
+          />
+          
+          <TouchableOpacity
+            style={styles.modalCloseButton}
+            onPress={() => {
+              if (isFromCalendar) {
+                setShowFromCalendar(false);
+              } else {
+                setShowToCalendar(false);
               }
-            ]} 
-          />
+            }}
+          >
+            <Text style={styles.modalCloseText}>Cancel</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </Modal>
   );
 
-  const renderLeaveRow = (leave) => (
-    <View key={leave.type} style={styles.leaveRow}>
-      <View style={styles.leaveInfo}>
-        <Text style={styles.leaveType}>{leave.type}</Text>
-        <Text style={styles.leaveTaken}>Taken: {leave.taken} days</Text>
+  const renderTrackedUserCard = (item) => (
+    <View key={item.date} style={styles.trackedUserCard}>
+      <View style={styles.trackedUserHeader}>
+        <Text style={styles.trackedUserDate}>{formatDisplayDate(item.date)}</Text>
+        <TouchableOpacity style={styles.viewButton}>
+          <Text style={styles.viewButtonText}>View &gt;</Text>
+        </TouchableOpacity>
       </View>
-      <View style={styles.leaveProgress}>
-        <View style={styles.leaveProgressBar}>
-          <View 
-            style={[
-              styles.leaveProgressFill, 
-              { width: `${(leave.taken / leave.total) * 100}%` }
-            ]} 
-          />
+      <View style={styles.trackedUserContent}>
+        <Icon name="people" size={20} color="#3088C7" />
+        <Text style={styles.trackedUserCount}>{item.uniqueUsersCount} users tracked</Text>
+      </View>
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Icon name="access-time" size={16} color="#666" />
+          <Text style={styles.statText}>{item.totalSessions} sessions</Text>
         </View>
-        <Text style={styles.leaveRemaining}>{leave.remaining} days left</Text>
-      </View>
-    </View>
-  );
-
-  const renderTaskCard = (task) => (
-    <View key={task.id} style={styles.taskCard}>
-      <View style={[styles.taskIconContainer, { backgroundColor: task.color + '20' }]}>
-        <Icon name={task.icon} size={24} color={task.color} />
-      </View>
-      <View style={styles.taskContent}>
-        <Text style={styles.taskName}>{task.task}</Text>
-        <Text style={styles.taskCount}>{task.count} pending</Text>
-      </View>
-      <View style={[styles.priorityBadge, { 
-        backgroundColor: task.priority === 'high' ? '#FFEBEE' : task.priority === 'medium' ? '#E3F2FD' : '#F3E5F5',
-      }]}>
-        <Text style={[styles.priorityText, { 
-          color: task.priority === 'high' ? '#F44336' : task.priority === 'medium' ? '#2196F3' : '#9C27B0'
-        }]}>
-          {task.priority}
-        </Text>
+        <View style={styles.statItem}>
+          <Icon name="location-on" size={16} color="#666" />
+          <Text style={styles.statText}>{item.totalLocations} locations</Text>
+        </View>
       </View>
     </View>
   );
@@ -140,112 +297,118 @@ const AdminReport = ({ navigation }) => {
       <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
       
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Reports</Text>
-        <Text style={styles.headerSubtitle}>Admin Overview</Text>
-      </View>
+      <CustomHeader title="Reports" />
 
       <ScrollView 
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        {/* Overview Stats */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Overview</Text>
-          <View style={styles.statsGrid}>
-            {renderStatCard('Total Employees', STATIC_REPORT_DATA.overview.totalEmployees, 'Registered', 'people', '#3088C7')}
-            {renderStatCard('Active Today', STATIC_REPORT_DATA.overview.activeEmployees, 'Working', 'how-to-reg', '#4CAF50')}
-            {renderStatCard('Departments', STATIC_REPORT_DATA.overview.totalDepartments, 'Active', 'business', '#9C27B0')}
-            {renderStatCard('Attendance', STATIC_REPORT_DATA.overview.averageAttendance, 'Average', 'trending-up', '#FF9800')}
+        {/* Date Filter Section */}
+        <View style={styles.filterSection}>
+          <View style={styles.filterHeader}>
+            <Text style={styles.filterTitle}>Select Date</Text>
+            <TouchableOpacity onPress={handleClearFilter}>
+              <Text style={styles.clearFilterText}>Clear Filter</Text>
+            </TouchableOpacity>
           </View>
+
+          <View style={styles.dateInputsContainer}>
+            <TouchableOpacity 
+              style={styles.dateInput}
+              onPress={() => setShowFromCalendar(true)}
+            >
+              <Text style={styles.dateLabel}>From</Text>
+              <Text style={[styles.dateValue, !fromDate && styles.placeholderText]}>
+                {fromDate ? formatDisplayDate(fromDate) : 'Select Date'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.dateInput}
+              onPress={() => setShowToCalendar(true)}
+            >
+              <Text style={styles.dateLabel}>To</Text>
+              <Text style={[styles.dateValue, !toDate && styles.placeholderText]}>
+                {toDate ? formatDisplayDate(toDate) : 'Select Date'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity 
+            style={[
+              styles.applyButton,
+              (!fromDate || !toDate || loading || isLoadingAdminId) && styles.applyButtonDisabled
+            ]}
+            onPress={handleApplyFilters}
+            disabled={!fromDate || !toDate || loading || isLoadingAdminId}
+          >
+            <Text style={styles.applyButtonText}>
+              {loading ? 'Loading...' : isLoadingAdminId ? 'Initializing...' : 'Apply Filters'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Today's Attendance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Attendance</Text>
-          <View style={styles.attendanceCard}>
-            <View style={styles.attendanceGrid}>
-              <View style={styles.attendanceItem}>
-                <Text style={[styles.attendanceValue, { color: '#4CAF50' }]}>
-                  {STATIC_REPORT_DATA.attendanceReport.present}
-                </Text>
-                <Text style={styles.attendanceLabel}>Present</Text>
+        {/* Loading Indicator */}
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3088C7" />
+            <Text style={styles.loadingText}>Loading report data...</Text>
+          </View>
+        )}
+
+        {/* Error Message */}
+        {error && !loading && (
+          <View style={styles.errorContainer}>
+            <Icon name="error" size={40} color="#FF6B6B" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
+        {/* Summary Cards */}
+        {showResults && summary && !loading && (
+          <View style={styles.summarySection}>
+            <Text style={styles.summaryTitle}>Summary</Text>
+            <View style={styles.summaryCardsContainer}>
+              <View style={styles.summaryCard}>
+                <Icon name="people" size={24} color="#3088C7" />
+                <Text style={styles.summaryValue}>{summary.totalUniqueUsers}</Text>
+                <Text style={styles.summaryLabel}>Unique Users</Text>
               </View>
-              <View style={styles.attendanceItem}>
-                <Text style={[styles.attendanceValue, { color: '#F44336' }]}>
-                  {STATIC_REPORT_DATA.attendanceReport.absent}
-                </Text>
-                <Text style={styles.attendanceLabel}>Absent</Text>
+              <View style={styles.summaryCard}>
+                <Icon name="access-time" size={24} color="#3088C7" />
+                <Text style={styles.summaryValue}>{summary.totalSessions}</Text>
+                <Text style={styles.summaryLabel}>Sessions</Text>
               </View>
-              <View style={styles.attendanceItem}>
-                <Text style={[styles.attendanceValue, { color: '#FF9800' }]}>
-                  {STATIC_REPORT_DATA.attendanceReport.onLeave}
-                </Text>
-                <Text style={styles.attendanceLabel}>On Leave</Text>
-              </View>
-              <View style={styles.attendanceItem}>
-                <Text style={[styles.attendanceValue, { color: '#9C27B0' }]}>
-                  {STATIC_REPORT_DATA.attendanceReport.late}
-                </Text>
-                <Text style={styles.attendanceLabel}>Late</Text>
+              <View style={styles.summaryCard}>
+                <Icon name="location-on" size={24} color="#3088C7" />
+                <Text style={styles.summaryValue}>{summary.totalLocations}</Text>
+                <Text style={styles.summaryLabel}>Locations</Text>
               </View>
             </View>
           </View>
-        </View>
+        )}
 
-        {/* Department Wise Attendance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Department Wise Attendance</Text>
-          <View style={styles.card}>
-            {STATIC_REPORT_DATA.departmentWiseAttendance.map(renderDepartmentRow)}
+        {/* Tracked Users Results */}
+        {showResults && filteredData.length > 0 && !loading && (
+          <View style={styles.resultsSection}>
+            <Text style={styles.resultsTitle}>Daily Breakdown</Text>
+            {filteredData.map(renderTrackedUserCard)}
           </View>
-        </View>
+        )}
 
-        {/* Leave Report */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Leave Report</Text>
-          <View style={styles.card}>
-            {STATIC_REPORT_DATA.leaveReport.map(renderLeaveRow)}
+        {/* Show message if no results */}
+        {showResults && filteredData.length === 0 && !loading && !error && (
+          <View style={styles.noResultsContainer}>
+            <Icon name="info" size={40} color="#999" />
+            <Text style={styles.noResultsText}>No tracked users found for selected date range</Text>
           </View>
-        </View>
-
-        {/* Pending Tasks */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pending Tasks</Text>
-          <View style={styles.tasksContainer}>
-            {STATIC_REPORT_DATA.pendingTasks.map(renderTaskCard)}
-          </View>
-        </View>
-
-        {/* Monthly Performance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Monthly Performance</Text>
-          <View style={styles.performanceCard}>
-            {STATIC_REPORT_DATA.monthlyPerformance.map((item, index) => (
-              <View key={index} style={styles.performanceItem}>
-                <Text style={styles.performanceMonth}>{item.month}</Text>
-                <View style={styles.performanceBarContainer}>
-                  <View 
-                    style={[
-                      styles.performanceBar, 
-                      { 
-                        width: `${(item.performance / 100) * 100}%`,
-                        backgroundColor: item.performance >= item.target ? '#4CAF50' : '#FF9800'
-                      }
-                    ]} 
-                  />
-                </View>
-                <View style={styles.performanceStats}>
-                  <Text style={styles.performanceValue}>{item.performance}%</Text>
-                  <Text style={styles.performanceTarget}>Target: {item.target}%</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-
+        )}
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* Calendar Modals */}
+      {renderCalendarModal(true)}
+      {renderCalendarModal(false)}
     </View>
   );
 };
@@ -255,299 +418,256 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  header: {
-    backgroundColor: '#3088C7',
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-  },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontFamily: 'Poppins-Bold',
-  },
-  headerSubtitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    marginTop: 4,
-    opacity: 0.8,
-  },
   scrollView: {
     flex: 1,
     paddingHorizontal: 15,
   },
-  section: {
-    marginTop: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 15,
-    width: '48%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  statContent: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 22,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-  },
-  statTitle: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-  },
-  statSubtitle: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-  },
-  statIconContainer: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  attendanceCard: {
+  filterSection: {
     backgroundColor: '#FFFFFF',
     borderRadius: 15,
     padding: 20,
+    marginTop: 20,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  attendanceGrid: {
+  filterHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
   },
-  attendanceItem: {
+  filterTitle: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+  },
+  clearFilterText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: '#3088C7',
+  },
+  dateInputsContainer: {
+    marginBottom: 15,
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  dateLabel: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+    marginBottom: 4,
+  },
+  dateValue: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: '#333',
+  },
+  placeholderText: {
+    color: '#999',
+  },
+  applyButton: {
+    backgroundColor: '#3088C7',
+    borderRadius: 10,
+    padding: 15,
     alignItems: 'center',
   },
-  attendanceValue: {
-    fontSize: 28,
-    fontFamily: 'Poppins-Bold',
+  applyButtonDisabled: {
+    backgroundColor: '#B0B0B0',
   },
-  attendanceLabel: {
+  applyButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
+    color: '#FFFFFF',
+  },
+  resultsSection: {
+    marginTop: 20,
+  },
+  trackedUserCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  trackedUserHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  trackedUserDate: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+  },
+  viewButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  viewButtonText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: '#3088C7',
+  },
+  trackedUserContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trackedUserCount: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+    marginLeft: 8,
+  },
+  noResultsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 30,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalCloseButton: {
+    marginTop: 15,
+    paddingVertical: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
+    color: '#3088C7',
+    textAlign: 'center',
+  },
+  bottomPadding: {
+    height: 30,
+  },
+  loadingContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 30,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: '#666',
+    marginTop: 10,
+  },
+  errorContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 30,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    color: '#FF6B6B',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  summarySection: {
+    marginTop: 20,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+    marginBottom: 15,
+  },
+  summaryCardsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 15,
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 5,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  summaryValue: {
+    fontSize: 20,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+    marginTop: 8,
+  },
+  summaryLabel: {
     fontSize: 12,
     fontFamily: 'Poppins-Regular',
     color: '#666',
     marginTop: 4,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  departmentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  departmentInfo: {
-    flex: 1,
-  },
-  departmentName: {
-    fontSize: 15,
+  resultsTitle: {
+    fontSize: 18,
     fontFamily: 'Poppins-Bold',
     color: '#333',
-  },
-  departmentCount: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginTop: 2,
-  },
-  percentageContainer: {
-    alignItems: 'flex-end',
-    width: 80,
-  },
-  percentageText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    marginBottom: 4,
-  },
-  progressBar: {
-    width: 70,
-    height: 6,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 3,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  leaveRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  leaveInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  leaveType: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-  },
-  leaveTaken: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-  },
-  leaveProgress: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  leaveProgressBar: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 4,
-    marginRight: 12,
-  },
-  leaveProgressFill: {
-    height: '100%',
-    backgroundColor: '#3088C7',
-    borderRadius: 4,
-  },
-  leaveRemaining: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    color: '#4CAF50',
-    width: 80,
-    textAlign: 'right',
-  },
-  tasksContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  taskCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  taskIconContainer: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  taskContent: {
-    flex: 1,
-  },
-  taskName: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-  },
-  taskCount: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginTop: 2,
-  },
-  priorityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  priorityText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-    textTransform: 'capitalize',
-  },
-  performanceCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  performanceItem: {
     marginBottom: 15,
   },
-  performanceMonth: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  performanceBarContainer: {
-    height: 12,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  performanceBar: {
-    height: '100%',
-    borderRadius: 6,
-  },
-  performanceStats: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
   },
-  performanceValue: {
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+  },
+  statText: {
     fontSize: 13,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-  },
-  performanceTarget: {
-    fontSize: 12,
     fontFamily: 'Poppins-Regular',
-    color: '#999',
-  },
-  bottomPadding: {
-    height: 30,
+    color: '#666',
+    marginLeft: 4,
   },
 });
 
