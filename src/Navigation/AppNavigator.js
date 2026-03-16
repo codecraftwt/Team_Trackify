@@ -275,7 +275,7 @@ const AuthenticatedStack = ({ route }) => {
             {/* Admin stack */}
             <Stack.Screen name="AdminDashboard" component={AdminDashboard} options={(props) => commonScreenOptions({ ...props, title: 'Admin Dashboard' })} />
             <Stack.Screen name="AdminHistory" component={AdminHistory} options={(props) => commonScreenOptions({ ...props, title: 'History' })} />
-            <Stack.Screen name="UserTrackingHistory" component={UserTrackingHistory} options={(props) => commonScreenOptions({ ...props, title: 'User Tracking' })} />
+            <Stack.Screen name="UserTrackingHistory" component={UserTrackingHistory} />
             <Stack.Screen name="SessionDetailMap" component={SessionDetailMap} options={(props) => commonScreenOptions({ ...props, title: 'Session Details' })} />
             <Stack.Screen name="AdminReport" component={AdminReport} options={(props) => commonScreenOptions({ ...props, title: 'Report' })} />
             <Stack.Screen name="AdminLeaveRequest" component={AdminLeaveRequest} options={(props) => commonScreenOptions({ ...props, title: 'Leave Request ' })} />

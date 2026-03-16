@@ -246,8 +246,159 @@ export const getSessionDetails = async (userId, sessionId) => {
   }
 };
 
+/**
+ * Get user sessions for a specific date
+ * @param {string} userId - The user's ID
+ * @param {string} date - Optional date in YYYY-MM-DD format
+ * @returns {Promise<{success: boolean, data: any, message: string}>}
+ */
+export const getUserSessions = async (userId, date = null) => {
+  try {
+
+    console.log("User ID =====>", userId);
+    console.log("Date =====>", date);
+
+    // Get the auth token
+    const token = await AsyncStorage.getItem('authToken');
+
+    if (!token) {
+      return {
+        success: false,
+        data: null,
+        message: 'Authentication token not found'
+      };
+    }
+
+    // Build URL with optional date parameter
+    let url = `${BASE_URL}/api/Tracking/admin/users/${userId}/sessions`;
+    if (date) {
+      url += `?date=${date}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token,
+      },
+    });
+
+    console.log("API Status =====>", response.status);
+
+    const text = await response.text();
+    console.log("Raw API Response =====>", text);
+
+    if (!text) {
+      return {
+        success: false,
+        data: null,
+        message: 'Empty response from server'
+      };
+    }
+
+    const result = JSON.parse(text);
+
+    console.log("Parsed Result =====>", result);
+
+    if (response.ok && result.success) {
+
+      console.log("User Sessions Data =====>", result.data);
+
+      return {
+        success: true,
+        data: result.data,
+        message: result.message || 'User sessions fetched successfully'
+      };
+
+    } else {
+      console.log("API Error Message =====>", result.message);
+
+      return {
+        success: false,
+        data: null,
+        message: result.message || 'Failed to fetch user sessions'
+      };
+    }
+
+  } catch (error) {
+    console.error('AdminService Error fetching user sessions =====>', error);
+
+    return {
+      success: false,
+      data: null,
+      message: error.message || 'Something went wrong'
+    };
+  }
+};
+
+// Add this function to your AdminService.js
+
+/**
+ * Get all dates where a user has tracking sessions
+ * @param {string} userId - The user's ID
+ * @returns {Promise<{success: boolean, data: any, message: string}>}
+ */
+export const getUserSessionDates = async (userId) => {
+  try {
+    // Get the auth token
+    const token = await AsyncStorage.getItem('authToken');
+
+    if (!token) {
+      return {
+        success: false,
+        data: null,
+        message: 'Authentication token not found'
+      };
+    }
+
+    const response = await fetch(`${BASE_URL}/api/Tracking/admin/users/${userId}/sessions/dates`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token,
+      },
+    });
+
+    const text = await response.text();
+    if (!text) {
+      return {
+        success: false,
+        data: null,
+        message: 'Empty response from server'
+      };
+    }
+
+    const result = JSON.parse(text);
+
+    if (response.ok && result.success) {
+      return {
+        success: true,
+        data: result.data,
+        message: result.message || 'User session dates fetched successfully'
+      };
+    } else {
+      return {
+        success: false,
+        data: null,
+        message: result.message || 'Failed to fetch user session dates'
+      };
+    }
+
+  } catch (error) {
+    console.error('AdminService Error fetching user session dates =====>', error);
+    return {
+      success: false,
+      data: null,
+      message: error.message || 'Something went wrong'
+    };
+  }
+};
+
+// Don't forget to export it
 export default {
   getAdminUsers,
   getUserTrackingSummary,
   getSessionDetails,
+  getUserSessions,
+  getUserSessionDates, // Add this
 };
