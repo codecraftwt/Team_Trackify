@@ -48,6 +48,8 @@ import Attendanceshow from '../Screens/Attendanceshow';
 import AdminDashboard from '../Screens/Admin/AdminDashboard';
 import AdminHistory from '../Screens/Admin/AdminHistory';
 import AdminReport from '../Screens/Admin/AdminReport';
+import AdminDateUsers from '../Screens/Admin/AdminDateUsers';
+import AdminUserSessions from '../Screens/Admin/AdminUserSessions';
 import UserTrackingHistory from '../Screens/Admin/UserTrackingHistory';
 import SessionDetailMap from '../Screens/Admin/SessionDetailMap';
 import FullImageScreen from '../FullImageScreen';
@@ -278,6 +280,8 @@ const AuthenticatedStack = ({ route }) => {
             <Stack.Screen name="UserTrackingHistory" component={UserTrackingHistory} />
             <Stack.Screen name="SessionDetailMap" component={SessionDetailMap} options={(props) => commonScreenOptions({ ...props, title: 'Session Details' })} />
             <Stack.Screen name="AdminReport" component={AdminReport} options={(props) => commonScreenOptions({ ...props, title: 'Report' })} />
+            <Stack.Screen name="AdminDateUsers" component={AdminDateUsers} options={{ headerShown: false }} />
+            <Stack.Screen name="AdminUserSessions" component={AdminUserSessions} options={{ headerShown: false }} />
             <Stack.Screen name="AdminLeaveRequest" component={AdminLeaveRequest} options={(props) => commonScreenOptions({ ...props, title: 'Leave Request ' })} />
             <Stack.Screen name="AdminTotalEmployees" component={AdminTotalEmployees} options={(props) => commonScreenOptions({ ...props, title: 'Total Employees ' })} />
             <Stack.Screen name="AdminLeaveDetails" component={AdminLeaveDetails} options={(props) => commonScreenOptions({ ...props, title: 'Leave Details ' })} />

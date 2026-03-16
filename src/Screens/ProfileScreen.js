@@ -125,7 +125,7 @@ const ProfileScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.editIconContainer}
             onPress={() => setShowDropdown(!showDropdown)}>
-            <Ionicons name="settings-sharp" size={f(3)} color="#fff" />
+            <Ionicons name="settings-sharp" size={f(6)} color="#fff" />
           </TouchableOpacity>
 
           {showDropdown && (
@@ -190,7 +190,7 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.separator} />
 
             <View style={styles.infoItem}>
-              <Icon name="phone" size={f(4)} color="#3088C7" />
+              <Icon name="phone-alt" size={f(4)} color="#3088C7" />
               <View style={styles.infoTextContainer}>
                 <Text style={styles.infoLabel}>Mobile</Text>
                 <Text style={styles.infoValue}>{userData?.mobile_no || 'Not Available'}</Text>
@@ -209,7 +209,7 @@ const ProfileScreen = ({ navigation }) => {
           </View>
 
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton} activeOpacity={0.85}>
-            <Icon name="sign-out-alt" size={f(2.5)} color="#fff" style={{ marginRight: wp(2) }} />
+            <Icon name="sign-out-alt" size={f(4)} color="#fff" style={{ marginRight: wp(2) }} />
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
         </View>

@@ -267,11 +267,24 @@ const AdminReport = ({ navigation }) => {
     </Modal>
   );
 
+  const handleViewDateDetails = (item) => {
+    navigation.navigate('AdminDateUsers', {
+      date: item.date,
+      users: item.users || [],
+      totalSessions: item.totalSessions,
+      totalLocations: item.totalLocations,
+      uniqueUsersCount: item.uniqueUsersCount,
+    });
+  };
+
   const renderTrackedUserCard = (item) => (
     <View key={item.date} style={styles.trackedUserCard}>
       <View style={styles.trackedUserHeader}>
         <Text style={styles.trackedUserDate}>{formatDisplayDate(item.date)}</Text>
-        <TouchableOpacity style={styles.viewButton}>
+        <TouchableOpacity
+          style={styles.viewButton}
+          onPress={() => handleViewDateDetails(item)}
+        >
           <Text style={styles.viewButtonText}>View &gt;</Text>
         </TouchableOpacity>
       </View>
