@@ -310,3 +310,33 @@ export const deleteSession = async (sessionId) => {
     throw error;
   }
 };
+
+export const getUserTrackingDates = async (userId) => {
+  console.log('getUserTrackingDates called with userId:', userId);
+  try {
+    const response = await Api.get(
+      `${TRACKING_BASE}/admin/users/${userId}/sessions/dates`
+    );
+
+    console.log('getUserTrackingDates raw response status:', response.status);
+    console.log('getUserTrackingDates raw response data:', response.data);
+
+    const data = response.data;
+    if (data?.success && data?.data) {
+      return data.data.dates || [];
+    }
+    return [];
+  } catch (error) {
+    if (error.response) {
+      console.error(
+        'Failed to fetch user tracking dates (response error):',
+        error.response.status,
+        error.response.data
+      );
+    } else {
+      console.error('Failed to fetch user tracking dates:', error.message);
+    }
+    return [];
+  }
+};
+

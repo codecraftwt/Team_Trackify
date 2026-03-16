@@ -7,11 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import { Calendar } from 'react-native-calendars';
 import * as TrackingService from '../../services/TrackingService';
 import CustomHeader from '../../Component/CustomHeader';
 import { useAuth } from '../../config/auth-context';
@@ -115,10 +116,13 @@ const SessionItem = ({ item, onPress }) => {
 
 const TrackingHistoryScreen = ({ route }) => {
   const navigation = useNavigation();
-  const { userProfile } = useAuth();
+  const { userProfile, userId: authUserId } = useAuth();
+  const targetUserId = route?.params?.userId || userProfile?.id || authUserId;
 
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [markedDates, setMarkedDates] = useState({});
+  const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -130,6 +134,60 @@ const TrackingHistoryScreen = ({ route }) => {
 
   const [page, setPage] = useState(1);
   const [nextCursor, setNextCursor] = useState(null);
+
+  // Fetch tracking dates for calendar using TrackingService
+  const fetchTrackingDates = async () => {
+    if (!targetUserId) {
+      console.log('fetchTrackingDates: no targetUserId found', {
+        routeUserId: route?.params?.userId,
+        profileId: userProfile?.id,
+        authUserId,
+      });
+      return;
+    }
+    
+    setLoadingCalendar(true);
+    try {
+      // Using the TrackingService function
+      console.log('Fetching tracking dates for userId:', targetUserId);
+      const dates = await TrackingService.getUserTrackingDates(targetUserId);
+      console.log('Dates from API:', dates); // Debug log
+      
+      const marked = {};
+
+      // Get today's date in YYYY-MM-DD format
+      const today = new Date().toISOString().split('T')[0];
+
+      // react-native-calendars: dots require markingType 'multi-dot' (or 'dot')
+      dates.forEach((date) => {
+        marked[date] = {
+          dots: [{ key: 'tracking', color: '#2563eb' }],
+        };
+      });
+
+      // Highlight today (with dot if it exists in API)
+      marked[today] = {
+        ...(marked[today] || {}),
+        selected: true,
+        selectedColor: '#ff9f1c',
+        selectedTextColor: '#ffffff',
+      };
+
+      console.log('Marked dates:', marked); // Debug log
+      setMarkedDates(marked);
+    } catch (error) {
+      console.error('Error fetching tracking dates:', error);
+    } finally {
+      setLoadingCalendar(false);
+    }
+  };
+
+  // Load calendar data when it becomes visible
+  useEffect(() => {
+    if (calendarVisible) {
+      fetchTrackingDates();
+    }
+  }, [calendarVisible, targetUserId]);
 
   const load = useCallback(
     async (isRefresh = false) => {
@@ -228,7 +286,7 @@ const TrackingHistoryScreen = ({ route }) => {
   const onDateChange = useCallback((date) => {
     setSelectedDate(date);
     setNextCursor(null);
-    setShowDatePicker(false);
+    setCalendarVisible(false);
   }, []);
 
   const prevDateRef = useRef(null);
@@ -239,10 +297,6 @@ const TrackingHistoryScreen = ({ route }) => {
     }
     prevDateRef.current = selectedDate;
   }, [selectedDate]);
-
-  const onDateConfirm = (date) => {
-    onDateChange(date);
-  };
 
   const onRefresh = () => {
     setNextCursor(null);
@@ -268,6 +322,19 @@ const TrackingHistoryScreen = ({ route }) => {
 
   const userName = userProfile?.name || 'History';
 
+  const renderLegend = () => (
+    <View style={styles.legendContainer}>
+      <View style={styles.legendItem}>
+        <View style={[styles.legendDot, { backgroundColor: '#2563eb' }]} />
+        <Text style={styles.legendText}>Has tracking data</Text>
+      </View>
+      <View style={styles.legendItem}>
+        <View style={[styles.legendDot, { backgroundColor: '#ff9f1c' }]} />
+        <Text style={styles.legendText}>Today</Text>
+      </View>
+    </View>
+  );
+
   if (loading && sessions.length === 0) {
     return (
       <>
@@ -277,7 +344,7 @@ const TrackingHistoryScreen = ({ route }) => {
           showBackButton={true}
           showDatePicker={true}
           date={formatDisplayDate(selectedDate)}
-          onDatePress={() => setShowDatePicker(true)}
+          onDatePress={() => setCalendarVisible(true)}
           userData={userProfile}
         />
         <View style={[styles.container, styles.center]}>
@@ -296,7 +363,7 @@ const TrackingHistoryScreen = ({ route }) => {
         showBackButton={true}
         showDatePicker={true}
         date={formatDisplayDate(selectedDate)}
-        onDatePress={() => setShowDatePicker(true)}
+        onDatePress={() => setCalendarVisible(true)}
         userData={userProfile}
       />
 
@@ -340,14 +407,64 @@ const TrackingHistoryScreen = ({ route }) => {
         />
       </View>
 
-      <DateTimePickerModal
-        isVisible={showDatePicker}
-        mode="date"
-        date={selectedDate}
-        onConfirm={onDateConfirm}
-        onCancel={() => setShowDatePicker(false)}
-        maximumDate={new Date()}
-      />
+      {/* Calendar Modal */}
+      <Modal
+        visible={calendarVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setCalendarVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.calendarContainer}>
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Select Date</Text>
+              <TouchableOpacity onPress={() => setCalendarVisible(false)} style={styles.closeButton}>
+                <Icon name="times" size={wp(5)} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            {loadingCalendar ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#2563eb" />
+                <Text style={styles.loadingText}>Loading calendar...</Text>
+              </View>
+            ) : (
+              <>
+                <Calendar
+                  current={selectedDate.toISOString().split('T')[0]}
+                  onDayPress={(day) => {
+                    onDateChange(new Date(day.dateString));
+                  }}
+                  markedDates={markedDates}
+                  markingType={'multi-dot'}
+                  theme={{
+                    backgroundColor: '#ffffff',
+                    calendarBackground: '#ffffff',
+                    textSectionTitleColor: '#b6c1cd',
+                    selectedDayBackgroundColor: '#ff9f1c',
+                    selectedDayTextColor: '#ffffff',
+                    todayTextColor: '#ff9f1c',
+                    dayTextColor: '#2d4150',
+                    textDisabledColor: '#d9e1e8',
+                    dotColor: '#2563eb',
+                    selectedDotColor: '#ffffff',
+                    arrowColor: '#2563eb',
+                    monthTextColor: '#2563eb',
+                    indicatorColor: '#2563eb',
+                    textDayFontWeight: '300',
+                    textMonthFontWeight: 'bold',
+                    textDayHeaderFontWeight: '300',
+                    textDayFontSize: wp(4),
+                    textMonthFontSize: wp(5),
+                    textDayHeaderFontSize: wp(3.5),
+                  }}
+                />
+                {renderLegend()}
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -520,5 +637,68 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 14,
     color: '#9ca3af',
+  },
+
+  // Calendar Modal Styles
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  calendarContainer: {
+    width: wp(90),
+    backgroundColor: '#ffffff',
+    borderRadius: wp(5),
+    padding: wp(4),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: hp(2),
+    paddingBottom: hp(1),
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTitle: {
+    fontSize: wp(5),
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  closeButton: {
+    padding: wp(2),
+  },
+  loadingContainer: {
+    height: hp(40),
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  legendContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: hp(2),
+    paddingTop: hp(2),
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendDot: {
+    width: wp(3),
+    height: wp(3),
+    borderRadius: wp(1.5),
+    marginRight: wp(2),
+  },
+  legendText: {
+    fontSize: wp(3.5),
+    color: '#4b5563',
   },
 });
