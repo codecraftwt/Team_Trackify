@@ -109,7 +109,7 @@ export const addLocationWithFormData = async (sessionId, formData) => {
     console.log(`Location sent successfully to session ${sessionId}, status: ${response.status}`);
     return { success: true, status: response.status };
   } catch (error) {
-    console.error('Failed to send location:', error);
+    // console.error('Failed to send location:', error);
     return { success: false, error };
   }
 };
@@ -230,7 +230,7 @@ export const endSession = async (sessionId) => {
     const { data } = await putRequest(`${TRACKING_BASE}/${sessionId}/end`, {});
     return data;
   } catch (error) {
-    console.error('Failed to end session:', error);
+    // console.error('Failed to end session:', error);
     throw error;
   }
 };

@@ -119,7 +119,7 @@ const ModalComponent = ({
   onClose,
   onConfirm,
   title = "Modal Title",
-  content = "This is a common modal component.",
+  // content = "This is a common modal component.",
   iconName,
   iconColor = '#C6303E',
   iconSize = wp('12%')
@@ -140,9 +140,9 @@ const ModalComponent = ({
           
           <Text style={styles.modalTitle}>{title}</Text>
           
-          <View style={styles.contentContainer}>
+          {/* <View style={styles.contentContainer}>
             <Text style={styles.modalContentText}>{content}</Text>
-          </View>
+          </View> */}
 
           <View style={styles.buttonContainer}>
             <TouchableOpacity
