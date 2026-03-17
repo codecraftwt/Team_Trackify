@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,62 @@ import { getSessionDetails } from '../../config/AdminService';
 
 const { width, height } = Dimensions.get('window');
 
+const normalizeTimestamp = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 0 && value < 1e12 ? value * 1000 : value;
+  }
+  if (typeof value === 'string') {
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber)) {
+      return asNumber > 0 && asNumber < 1e12 ? asNumber * 1000 : asNumber;
+    }
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return 0;
+};
+
+const toFiniteNumber = (v) => {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+const buildCleanSortedCoordinates = (locations) => {
+  if (!Array.isArray(locations) || locations.length === 0) return [];
+
+  const withCoords = locations
+    .map((loc) => {
+      const latitude = toFiniteNumber(loc?.latitude);
+      const longitude = toFiniteNumber(loc?.longitude);
+      const t = normalizeTimestamp(
+        loc?.timestamp ?? loc?.time ?? loc?.createdAt ?? loc?.updatedAt
+      );
+      if (latitude == null || longitude == null) return null;
+      return { latitude, longitude, _t: t };
+    })
+    .filter(Boolean);
+
+  // If timestamps are missing/zero, keep incoming order; otherwise sort by time.
+  const hasAnyTimestamp = withCoords.some((p) => p._t && p._t > 0);
+  const sorted = hasAnyTimestamp
+    ? [...withCoords].sort((a, b) => (a._t || 0) - (b._t || 0))
+    : withCoords;
+
+  // De-dup consecutive identical points (common when API includes marker points).
+  const deduped = [];
+  for (const p of sorted) {
+    const prev = deduped[deduped.length - 1];
+    if (prev && prev.latitude === p.latitude && prev.longitude === p.longitude) {
+      continue;
+    }
+    deduped.push(p);
+  }
+
+  return deduped.map(({ latitude, longitude }) => ({ latitude, longitude }));
+};
+
 const SessionDetailMap = ({ navigation, route }) => {
   const { userId, sessionId, sessionDate } = route.params || {};
   const mapRef = useRef(null);
@@ -24,6 +80,11 @@ const SessionDetailMap = ({ navigation, route }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showTimeline, setShowTimeline] = useState(false);
+
+  const polylineCoordinates = useMemo(
+    () => buildCleanSortedCoordinates(sessionData?.locations),
+    [sessionData?.locations]
+  );
 
   // Fetch session details
   const fetchSessionDetails = useCallback(async () => {
@@ -41,23 +102,6 @@ const SessionDetailMap = ({ navigation, route }) => {
 
       if (response.success && response.data) {
         setSessionData(response.data);
-        
-        // Fit map to show all markers after data loads
-        setTimeout(() => {
-          if (mapRef.current && response.data.bounds) {
-            const { bounds } = response.data;
-            mapRef.current.fitToCoordinates(
-              [
-                { latitude: bounds.north, longitude: bounds.east },
-                { latitude: bounds.south, longitude: bounds.west },
-              ],
-              {
-                edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-                animated: true,
-              }
-            );
-          }
-        }, 500);
       } else {
         setError(response.message || 'Failed to fetch session details');
       }
@@ -76,6 +120,46 @@ const SessionDetailMap = ({ navigation, route }) => {
       title: sessionDate ? `Session: ${sessionDate}` : 'Session Details' 
     });
   }, [fetchSessionDetails, navigation, sessionDate]);
+
+  // Fit map once we have a cleaned route polyline (preferred).
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (!polylineCoordinates || polylineCoordinates.length < 2) return;
+    // Small delay to ensure map is laid out before fitting.
+    const t = setTimeout(() => {
+      try {
+        mapRef.current?.fitToCoordinates(polylineCoordinates, {
+          edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+          animated: true,
+        });
+      } catch (e) {
+        // ignore fit errors (rare on initial mount)
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [polylineCoordinates]);
+
+  // Fallback fit using API bounds when route points are missing.
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (polylineCoordinates && polylineCoordinates.length >= 2) return;
+    const bounds = sessionData?.bounds;
+    if (!bounds) return;
+    const t = setTimeout(() => {
+      try {
+        mapRef.current?.fitToCoordinates(
+          [
+            { latitude: bounds.north, longitude: bounds.east },
+            { latitude: bounds.south, longitude: bounds.west },
+          ],
+          { edgePadding: { top: 50, right: 50, bottom: 50, left: 50 }, animated: true }
+        );
+      } catch (e) {
+        // ignore
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [sessionData?.bounds, polylineCoordinates]);
 
   // Format duration
   const formatDuration = (seconds) => {
@@ -172,16 +256,12 @@ const SessionDetailMap = ({ navigation, route }) => {
 
   // Generate coordinates for polyline
   const getPolylineCoordinates = () => {
-    if (!sessionData?.locations) return [];
-    return sessionData.locations.map(loc => ({
-      latitude: loc.latitude,
-      longitude: loc.longitude,
-    }));
+    return polylineCoordinates || [];
   };
 
   // Calculate initial region
   const getInitialRegion = () => {
-    if (!sessionData?.locations || sessionData.locations.length === 0) {
+    if (!polylineCoordinates || polylineCoordinates.length === 0) {
       return {
         latitude: 16.7332,
         longitude: 74.1282,
@@ -190,7 +270,7 @@ const SessionDetailMap = ({ navigation, route }) => {
       };
     }
 
-    const firstLocation = sessionData.locations[0];
+    const firstLocation = polylineCoordinates[0];
     return {
       latitude: firstLocation.latitude,
       longitude: firstLocation.longitude,
