@@ -37,9 +37,7 @@ const AdminReport = ({ navigation }) => {
         const id = await AsyncStorage.getItem('userId');
         if (id) {
           setAdminId(id);
-          console.log('Admin ID retrieved:', id);
         } else {
-          console.log('No admin ID found in AsyncStorage');
           setError('Admin ID not found. Please log in again.');
         }
       } catch (err) {
@@ -66,7 +64,7 @@ const AdminReport = ({ navigation }) => {
   const handleFromDateSelect = (date) => {
     setFromDate(date.dateString);
     setShowFromCalendar(false);
-    
+
     // Update marked dates
     const newMarkedDates = {};
     if (date.dateString) {
@@ -85,14 +83,14 @@ const AdminReport = ({ navigation }) => {
         endingDay: true,
         color: '#3088C7',
       };
-      
+
       // Mark dates in between
       const start = new Date(date.dateString);
       const end = new Date(toDate);
       if (start <= end) {
         const currentDate = new Date(start);
         currentDate.setDate(currentDate.getDate() + 1);
-        
+
         while (currentDate < end) {
           const dateStr = currentDate.toISOString().split('T')[0];
           newMarkedDates[dateStr] = {
@@ -111,7 +109,7 @@ const AdminReport = ({ navigation }) => {
   const handleToDateSelect = (date) => {
     setToDate(date.dateString);
     setShowToCalendar(false);
-    
+
     // Update marked dates
     const newMarkedDates = {};
     if (fromDate) {
@@ -130,7 +128,7 @@ const AdminReport = ({ navigation }) => {
         color: '#3088C7',
       };
     }
-    
+
     // Mark dates in between
     if (fromDate && date.dateString) {
       const start = new Date(fromDate);
@@ -138,7 +136,7 @@ const AdminReport = ({ navigation }) => {
       if (start <= end) {
         const currentDate = new Date(start);
         currentDate.setDate(currentDate.getDate() + 1);
-        
+
         while (currentDate < end) {
           const dateStr = currentDate.toISOString().split('T')[0];
           newMarkedDates[dateStr] = {
@@ -154,24 +152,16 @@ const AdminReport = ({ navigation }) => {
   };
 
   const handleApplyFilters = async () => {
-    console.log('Apply button clicked - fromDate:', fromDate, 'toDate:', toDate, 'adminId:', adminId);
-    
     if (fromDate && toDate && adminId) {
       const start = new Date(fromDate);
       const end = new Date(toDate);
-      
+
       if (start <= end) {
         setLoading(true);
         setError(null);
-        
-        console.log('Calling API with adminId:', adminId, 'startDate:', fromDate, 'endDate:', toDate);
-        
         const result = await getAdminAllTracks(adminId, fromDate, toDate);
-        
-        console.log('API result:', result);
-        
         setLoading(false);
-        
+
         if (result.success) {
           setFilteredData(result.data.dateWiseData || []);
           setSummary(result.data.summary || null);
@@ -186,7 +176,6 @@ const AdminReport = ({ navigation }) => {
         setShowResults(true);
       }
     } else {
-      console.log('Missing required params - fromDate:', fromDate, 'toDate:', toDate, 'adminId:', adminId);
       if (!adminId) {
         setError('Admin ID not found. Please log in again.');
         setShowResults(true);
@@ -231,7 +220,7 @@ const AdminReport = ({ navigation }) => {
           <Text style={styles.modalTitle}>
             Select {isFromCalendar ? 'From' : 'To'} Date
           </Text>
-          
+
           <Calendar
             current={getCurrentMonth()}
             minDate={getCurrentMonth()}
@@ -249,7 +238,7 @@ const AdminReport = ({ navigation }) => {
               textDayHeaderFontFamily: 'Poppins-Medium',
             }}
           />
-          
+
           <TouchableOpacity
             style={styles.modalCloseButton}
             onPress={() => {
@@ -279,40 +268,48 @@ const AdminReport = ({ navigation }) => {
 
   const renderTrackedUserCard = (item) => (
     <View key={item.date} style={styles.trackedUserCard}>
-      <View style={styles.trackedUserHeader}>
-        <Text style={styles.trackedUserDate}>{formatDisplayDate(item.date)}</Text>
-        <TouchableOpacity
-          style={styles.viewButton}
-          onPress={() => handleViewDateDetails(item)}
-        >
-          <Text style={styles.viewButtonText}>View &gt;</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.trackedUserContent}>
-        <Icon name="people" size={20} color="#3088C7" />
-        <Text style={styles.trackedUserCount}>{item.uniqueUsersCount} users tracked</Text>
-      </View>
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Icon name="access-time" size={16} color="#666" />
-          <Text style={styles.statText}>{item.totalSessions} sessions</Text>
+      <View style={styles.rowContainer}>
+
+        {/* Icon */}
+        <View style={styles.iconWrapper}>
+          <Icon name="people" size={20} color="#3088C7" />
         </View>
-        <View style={styles.statItem}>
-          <Icon name="location-on" size={16} color="#666" />
-          <Text style={styles.statText}>{item.totalLocations} locations</Text>
+
+        {/* Content + Button Row */}
+        <View style={styles.rightSection}>
+
+          {/* View 1 */}
+          <View style={styles.contentContainer}>
+            <Text style={styles.trackedUserDate}>
+              {formatDisplayDate(item.date)}
+            </Text>
+
+            <Text style={styles.trackedUserCount}>
+              {item.uniqueUsersCount} users tracked
+            </Text>
+          </View>
+
+          {/* View Button */}
+          <TouchableOpacity
+            style={styles.viewButton}
+            onPress={() => handleViewDateDetails(item)}
+          >
+            <Text style={styles.viewButtonText}>View</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
   );
 
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
-      
+
       {/* Header */}
       <CustomHeader title="Reports" />
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
@@ -326,7 +323,7 @@ const AdminReport = ({ navigation }) => {
           </View>
 
           <View style={styles.dateInputsContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.dateInput}
               onPress={() => setShowFromCalendar(true)}
             >
@@ -336,7 +333,7 @@ const AdminReport = ({ navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.dateInput}
               onPress={() => setShowToCalendar(true)}
             >
@@ -347,7 +344,7 @@ const AdminReport = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               styles.applyButton,
               (!fromDate || !toDate || loading || isLoadingAdminId) && styles.applyButtonDisabled
@@ -374,30 +371,6 @@ const AdminReport = ({ navigation }) => {
           <View style={styles.errorContainer}>
             <Icon name="error" size={40} color="#FF6B6B" />
             <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
-
-        {/* Summary Cards */}
-        {showResults && summary && !loading && (
-          <View style={styles.summarySection}>
-            <Text style={styles.summaryTitle}>Summary</Text>
-            <View style={styles.summaryCardsContainer}>
-              <View style={styles.summaryCard}>
-                <Icon name="people" size={24} color="#3088C7" />
-                <Text style={styles.summaryValue}>{summary.totalUniqueUsers}</Text>
-                <Text style={styles.summaryLabel}>Unique Users</Text>
-              </View>
-              <View style={styles.summaryCard}>
-                <Icon name="access-time" size={24} color="#3088C7" />
-                <Text style={styles.summaryValue}>{summary.totalSessions}</Text>
-                <Text style={styles.summaryLabel}>Sessions</Text>
-              </View>
-              <View style={styles.summaryCard}>
-                <Icon name="location-on" size={24} color="#3088C7" />
-                <Text style={styles.summaryValue}>{summary.totalLocations}</Text>
-                <Text style={styles.summaryLabel}>Locations</Text>
-              </View>
-            </View>
           </View>
         )}
 
@@ -503,46 +476,12 @@ const styles = StyleSheet.create({
   resultsSection: {
     marginTop: 20,
   },
-  trackedUserCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  trackedUserHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  trackedUserDate: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-  },
-  viewButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  viewButtonText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
-    color: '#3088C7',
-  },
-  trackedUserContent: {
+  rowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  trackedUserCount: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginLeft: 8,
+  contentContainer: {
+    marginLeft: 10,
   },
   noResultsContainer: {
     backgroundColor: '#FFFFFF',
@@ -620,44 +559,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
   },
-  summarySection: {
-    marginTop: 20,
-  },
-  summaryTitle: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  summaryCardsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  summaryCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    padding: 15,
-    alignItems: 'center',
-    flex: 1,
-    marginHorizontal: 5,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  summaryValue: {
-    fontSize: 20,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginTop: 8,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginTop: 4,
-  },
   resultsTitle: {
     fontSize: 18,
     fontFamily: 'Poppins-Bold',
@@ -681,6 +582,78 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
     color: '#666',
     marginLeft: 4,
+  },
+
+  // ==========================================
+
+  trackedUserCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  trackedUserHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  trackedUserDate: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  trackedUserContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trackedUserCount: {
+    fontSize: 14,
+    color: '#6B7280',
+    // marginLeft: 8,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  rightSection: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between', // pushes button to right
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+
+  contentContainer: {
+    flexDirection: 'column',
+  },
+
+  viewButton: {
+    backgroundColor: '#E8F0FE',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+
+  viewButtonText: {
+    color: '#3088C7',
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+  },
+  iconWrapper: {
+    backgroundColor: '#E8F0FE',
+    padding: 9,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

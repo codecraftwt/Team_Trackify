@@ -15,6 +15,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  BackHandler
 } from 'react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -208,6 +209,36 @@ const LocationTrackingScreen = () => {
     setAlertConfig({ title, message, type });
     setAlertVisible(true);
   }, []);
+
+  // Add back handler for Android
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleBackPress
+    );
+
+    return () => backHandler.remove();
+  }, []);
+
+  const handleBackPress = () => {
+    Alert.alert(
+      'Exit App',
+      'Are you sure you want to exit?',
+      [
+        {
+          text: 'Cancel',
+          onPress: () => null,
+          style: 'cancel',
+        },
+        {
+          text: 'Exit',
+          onPress: () => BackHandler.exitApp(),
+        },
+      ],
+      { cancelable: false }
+    );
+    return true; // Prevent default back button behavior
+  };
 
   const showSystemLocationDisabledAlert = useCallback(() => {
     Alert.alert(
@@ -601,7 +632,7 @@ const LocationTrackingScreen = () => {
       console.log('Start tracking response:', started);
       const sessionId = started?.sessionId;
       console.log("sessionId ----", sessionId);
-      
+
       if (!sessionId) {
         throw new Error('Failed to start tracking session');
       }
@@ -1309,7 +1340,7 @@ const styles = StyleSheet.create({
   },
   statLabel: { color: '#6B7280', fontSize: wp(3.8) },
   statValue: { color: '#111827', fontWeight: '700', fontSize: wp(3.9) },
- 
+
   errorText: { marginLeft: 8, flex: 1, color: '#B91C1C', fontSize: wp(3.5) },
   mainBtn: {
     width: '100%',

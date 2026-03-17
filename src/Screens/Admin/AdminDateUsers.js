@@ -16,9 +16,9 @@ const AdminDateUsers = ({ route, navigation }) => {
   const {
     date,
     users = [],
-    totalSessions,
-    totalLocations,
-    uniqueUsersCount,
+    // totalSessions,
+    // totalLocations,
+    // uniqueUsersCount,
   } = route.params || {};
 
   const renderUserItem = ({ item }) => (
@@ -38,15 +38,13 @@ const AdminDateUsers = ({ route, navigation }) => {
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.name}</Text>
         <Text style={styles.userEmail}>{item.email}</Text>
-        <View style={styles.userStatsRow}>
-          <View style={styles.userStat}>
-            <Icon name="access-time" size={14} color="#666" />
-            <Text style={styles.userStatText}>{item.sessionCount} sessions</Text>
-          </View>
-          <View style={styles.userStat}>
-            <Icon name="location-on" size={14} color="#666" />
-            <Text style={styles.userStatText}>{item.locationCount} locations</Text>
-          </View>
+
+        {/* Session badge */}
+        <View style={styles.sessionBadge}>
+          <Icon name="access-time" size={12} color="#E67E22" />
+          <Text style={styles.sessionText}>
+            {item.sessionCount} sessions
+          </Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -57,28 +55,10 @@ const AdminDateUsers = ({ route, navigation }) => {
       <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
       <CustomHeader
         navigation={navigation}
-          showBackButton={true}
+        showBackButton={true}
         title={formatDisplayDate(date)}
         onBack={() => navigation.goBack()}
       />
-
-      <View style={styles.summaryBox}>
-        <View style={styles.summaryItem}>
-          <Icon name="people" size={20} color="#3088C7" />
-          <Text style={styles.summaryValue}>{uniqueUsersCount}</Text>
-          <Text style={styles.summaryLabel}>Users</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <Icon name="access-time" size={20} color="#3088C7" />
-          <Text style={styles.summaryValue}>{totalSessions}</Text>
-          <Text style={styles.summaryLabel}>Sessions</Text>
-        </View>
-        <View style={styles.summaryItem}>
-          <Icon name="location-on" size={20} color="#3088C7" />
-          <Text style={styles.summaryValue}>{totalLocations}</Text>
-          <Text style={styles.summaryLabel}>Locations</Text>
-        </View>
-      </View>
 
       <FlatList
         data={users}
@@ -99,31 +79,9 @@ const AdminDateUsers = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
-  summaryBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    margin: 16,
-    padding: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryValue: {
-    marginTop: 4,
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-  },
-  summaryLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F5F5'
   },
   listContent: {
     paddingHorizontal: 16,
@@ -134,12 +92,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 12,
-    marginTop: 10,
+    marginTop: 18,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    paddingVertical: 17
   },
   userAvatar: {
     width: 40,
@@ -150,31 +109,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  userInfo: { flex: 1 },
-  userName: {
-    fontSize: 15,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
+  userInfo: {
+    flex: 1,
+    position: 'relative',
   },
-  userEmail: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-  },
-  userStatsRow: {
-    flexDirection: 'row',
-    marginTop: 6,
-  },
-  userStat: {
+  sessionBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  userStatText: {
+  sessionText: {
     marginLeft: 4,
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+    color: '#E67E22',
   },
   emptyContainer: {
     marginTop: 40,

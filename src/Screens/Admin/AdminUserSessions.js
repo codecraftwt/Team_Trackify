@@ -32,20 +32,6 @@ const formatTime = (dateString) => {
   });
 };
 
-const formatDuration = (seconds) => {
-  if (!seconds) return '0m';
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  } else if (minutes > 0) {
-    return `${minutes}m ${secs}s`;
-  }
-  return `${secs}s`;
-};
-
 const formatDistance = (distance) => {
   if (!distance) return '0 km';
   return `${distance.toFixed(2)} km`;
@@ -55,7 +41,7 @@ const AdminUserSessions = ({ route, navigation }) => {
   const { userId, userName, date } = route.params || {};
 
   const [sessions, setSessions] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const loadSessions = useCallback(async () => {
@@ -70,9 +56,7 @@ const AdminUserSessions = ({ route, navigation }) => {
       }
 
       const response = await getUserSessions(userId, date);
-
       if (response.success && response.data) {
-        // API shape from existing admin history: response.data.sessions
         setSessions(response.data.sessions || []);
       } else {
         setError(response.message || 'Failed to fetch user sessions');
@@ -89,58 +73,71 @@ const AdminUserSessions = ({ route, navigation }) => {
     loadSessions();
   }, [loadSessions]);
 
-  const renderSessionItem = ({ item, index }) => (
-    <TouchableOpacity
-      style={styles.sessionItem}
-      onPress={() => {
-        navigation.navigate('SessionDetailMap', {
-          userId,
-          sessionId: item.sessionId,
-          sessionDate: item.startTime,
-        });
-      }}
-    >
-      <View style={styles.sessionHeader}>
-        <View style={styles.sessionDateContainer}>
-          <Icon name='event' size={16} color='#3088C7' />
-          <Text style={styles.sessionDate}>{formatDate(item.startTime)}</Text>
-        </View>
-        <View style={styles.sessionIdContainer}>
-          <Text style={styles.sessionId}>#{index + 1}</Text>
-        </View>
-      </View>
-      <View style={styles.sessionDetails}>
-        <View style={styles.sessionTimeRow}>
-          <View style={styles.sessionTimeItem}>
-            <Icon name='play-arrow' size={16} color='#4CAF50' />
-            <Text style={styles.sessionTimeLabel}>Start:</Text>
-            <Text style={styles.sessionTime}>{formatTime(item.startTime)}</Text>
-          </View>
-          <View style={styles.sessionTimeItem}>
-            <Icon name='stop' size={16} color='#F44336' />
-            <Text style={styles.sessionTimeLabel}>End:</Text>
-            <Text style={styles.sessionTime}>{formatTime(item.endTime)}</Text>
-          </View>
-        </View>
-        <View style={styles.sessionStatsRow}>
-          <View style={styles.sessionStatItem}>
-            <Icon name='timer' size={14} color='#666' />
-            <Text style={styles.sessionStatLabel}>Duration:</Text>
-            <Text style={styles.sessionStatValue}>
-              {formatDuration(item.duration)}
+  const getSessionStatus = (item) => {
+    return item.startTime && item.endTime ? 'Completed' : 'Active';
+  };
+
+  const renderSessionItem = ({ item, index }) => {
+    const status = getSessionStatus(item);
+    
+    return (
+      <TouchableOpacity
+        style={styles.sessionItem}
+        onPress={() => {
+          navigation.navigate('SessionDetailMap', {
+            userId,
+            sessionId: item.sessionId,
+            sessionDate: item.startTime,
+          });
+        }}
+      >
+        <View style={styles.sessionHeader}>
+          <View style={styles.statusContainer}>
+            {status === 'Completed' ? (
+              <Icon name='check-circle' size={16} color='#4CAF50' />
+            ) : (
+              <Icon name='play-circle-filled' size={16} color='#FF9800' />
+            )}
+            <Text style={[
+              styles.statusText,
+              status === 'Completed' ? styles.completedText : styles.activeText
+            ]}>
+              {status}
             </Text>
           </View>
-          <View style={styles.sessionStatItem}>
-            <Icon name='straighten' size={14} color='#666' />
-            <Text style={styles.sessionStatLabel}>Distance:</Text>
-            <Text style={styles.sessionStatValue}>
-              {formatDistance(item.totalDistance)}
+          <Text style={styles.routeLink}>Tap to view route on map</Text>
+        </View>
+
+        <View style={styles.dateTimeContainer}>
+          <View style={styles.dateTimeItem}>
+            <Text style={styles.dateTimeLabel}>Start:</Text>
+            <Text style={styles.dateTimeValue}>
+              {formatDate(item.startTime)} • {formatTime(item.startTime)}
             </Text>
           </View>
+          
+          <View style={styles.dateTimeItem}>
+            <Text style={styles.dateTimeLabel}>End:</Text>
+            {item.endTime ? (
+              <Text style={styles.dateTimeValue}>
+                {formatDate(item.endTime)} • {formatTime(item.endTime)}
+              </Text>
+            ) : (
+              <Text style={styles.dateTimeValue}>--</Text>
+            )}
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+
+        <View style={styles.distanceContainer}>
+          <Icon name='straighten' size={16} color='#666' />
+          <Text style={styles.distanceLabel}>Travelled Distance:</Text>
+          <Text style={styles.distanceValue}>
+            {formatDistance(item.totalDistance)}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmptySessions = () => (
     <View style={styles.emptySessions}>
@@ -176,7 +173,7 @@ const AdminUserSessions = ({ route, navigation }) => {
       <CustomHeader
         navigation={navigation}
         showBackButton={true}
-        title={userName || 'User Sessions'}
+        title={`${userName || 'User Sessions'} - ${formatDate(date)}`}
         titleColor='#ffffff'
         iconColor='#ffffff'
       />
@@ -196,16 +193,6 @@ const AdminUserSessions = ({ route, navigation }) => {
           renderItem={renderSessionItem}
           keyExtractor={(item, index) => item.sessionId || index.toString()}
           contentContainerStyle={styles.listContainer}
-          ListHeaderComponent={
-            <View style={styles.selectedDateInfo}>
-              <View style={styles.selectedDateHeader}>
-                <Icon name='event' size={18} color='#3088C7' />
-                <Text style={styles.selectedDateText}>
-                  {date ? formatDate(date) : 'Selected Date'}
-                </Text>
-              </View>
-            </View>
-          }
           ListEmptyComponent={renderEmptySessions}
           showsVerticalScrollIndicator={false}
         />
@@ -259,32 +246,11 @@ const styles = StyleSheet.create({
     padding: 16,
     flexGrow: 1,
   },
-  selectedDateInfo: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  selectedDateHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  selectedDateText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginLeft: 8,
-  },
   sessionItem: {
     backgroundColor: '#FFF',
     borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
+    padding: 16,
+    marginBottom: 12,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -295,73 +261,73 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 10,
+    marginBottom: 12,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    borderBottomColor: '#F0F0F0',
   },
-  sessionDateContainer: {
+  statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  sessionDate: {
+  statusText: {
     fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
+    fontFamily: 'Poppins-Medium',
     marginLeft: 6,
   },
-  sessionIdContainer: {
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+  completedText: {
+    color: '#4CAF50',
   },
-  sessionId: {
+  activeText: {
+    color: '#FF9800',
+  },
+  routeLink: {
     fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    color: '#666',
+    fontFamily: 'Poppins-Regular',
+    color: '#3088C7',
+    // textDecorationLine: 'underline',
+    backgroundColor:'#deeffb',
+    padding: 6,
+    borderRadius: 4,
   },
-  sessionDetails: {},
-  sessionTimeRow: {
+  dateTimeContainer: {
+    marginBottom: 12,
+  },
+  dateTimeItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     marginBottom: 8,
   },
-  sessionTimeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sessionTimeLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginLeft: 4,
-  },
-  sessionTime: {
-    fontSize: 12,
+  dateTimeLabel: {
+    fontSize: 13,
     fontFamily: 'Poppins-Medium',
+    color: '#666',
+    width: 45,
+  },
+  dateTimeValue: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Regular',
     color: '#333',
-    marginLeft: 4,
+    flex: 1,
   },
-  sessionStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  sessionStatItem: {
+  distanceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 4,
   },
-  sessionStatLabel: {
-    fontSize: 12,
+  distanceLabel: {
+    fontSize: 13,
     fontFamily: 'Poppins-Regular',
     color: '#666',
-    marginLeft: 4,
+    marginLeft: 6,
+    marginRight: 4,
   },
-  sessionStatValue: {
-    fontSize: 12,
+  distanceValue: {
+    fontSize: 13,
     fontFamily: 'Poppins-Bold',
     color: '#333',
-    marginLeft: 4,
   },
   emptySessions: {
     alignItems: 'center',
@@ -378,4 +344,3 @@ const styles = StyleSheet.create({
 });
 
 export default AdminUserSessions;
-
