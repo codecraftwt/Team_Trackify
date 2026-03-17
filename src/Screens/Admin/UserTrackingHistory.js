@@ -1088,6 +1088,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import Icon2 from 'react-native-vector-icons/FontAwesome';
 import { Calendar } from 'react-native-calendars';
 import { getUserSessions, getUserSessionDates } from '../../config/AdminService';
 import CustomHeader from '../../Component/CustomHeader';
@@ -1155,7 +1156,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [userId]);
+  }, [userId, selectedDate]);
 
   // Fetch all dates where user has sessions
   const fetchAllUserSessionDates = useCallback(async () => {
@@ -1187,7 +1188,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
         dots: [
           {
             key: 'tracking',
-            color: '#3088C7',
+            color: '#2563eb',
             selectedDotColor: '#FFF',
           }
         ],
@@ -1200,7 +1201,8 @@ const UserTrackingHistory = ({ navigation, route }) => {
       marks[selectedDate] = {
         ...marks[selectedDate],
         selected: true,
-        selectedColor: '#3088C7',
+        selectedColor: '#ff9f1c',
+        selectedTextColor: '#ffffff',
       };
     }
 
@@ -1286,10 +1288,12 @@ const UserTrackingHistory = ({ navigation, route }) => {
     return `${secs}s`;
   };
 
-  // Format distance
-  const formatDistance = (distance) => {
-    if (!distance) return '0 km';
-    return `${distance.toFixed(2)} km`;
+  // Format distance in km
+  const formatDistanceKm = (val) => {
+    if (val == null || val === undefined) return '0.00 km';
+    const n = Number(val);
+    const km = n > 500 ? n / 1000 : n;
+    return `${km.toFixed(2)} km`;
   };
 
   // Format date
@@ -1304,13 +1308,25 @@ const UserTrackingHistory = ({ navigation, route }) => {
   };
 
   // Format time
-  const formatTime = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-GB', {
+  const formatTime = (iso) => {
+    if (!iso) return '—';
+    
+    // If the string doesn't have 'Z' and no timezone offset, assume it's UTC
+    let dateStr = iso;
+    if (iso && !iso.endsWith('Z') && !iso.includes('+')) {
+      dateStr = iso + 'Z'; // Append Z to treat as UTC
+    }
+
+    const d = new Date(dateStr);
+
+    // Check if date is valid
+    if (isNaN(d.getTime())) return '—';
+
+    return d.toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false,
+      hour12: true,
     });
   };
 
@@ -1335,44 +1351,6 @@ const UserTrackingHistory = ({ navigation, route }) => {
   };
 
   // Render stats card based on current sessions
-  // const renderStatsCard = () => {
-  //   const sessions = trackingData?.sessions || [];
-
-  //   // Calculate stats from sessions
-  //   const totalSessions = sessions.length;
-  //   const totalDistance = sessions.reduce((sum, s) => sum + (s.totalDistance || 0), 0);
-  //   const totalDuration = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
-  //   const averageDistance = totalSessions > 0 ? totalDistance / totalSessions : 0;
-
-  //   return (
-  //     <View style={styles.statsCardContainer}>
-  //       <View style={styles.statsRow}>
-  //         <View style={styles.statItem}>
-  //           <Icon name="access-time" size={24} color="#3088C7" />
-  //           <Text style={styles.statValue}>{totalSessions}</Text>
-  //           <Text style={styles.statLabel}>Sessions</Text>
-  //         </View>
-  //         <View style={styles.statItem}>
-  //           <Icon name="straighten" size={24} color="#3088C7" />
-  //           <Text style={styles.statValue}>{formatDistance(totalDistance)}</Text>
-  //           <Text style={styles.statLabel}>Distance</Text>
-  //         </View>
-  //         <View style={styles.statItem}>
-  //           <Icon name="timer" size={24} color="#3088C7" />
-  //           <Text style={styles.statValue}>{formatDuration(totalDuration)}</Text>
-  //           <Text style={styles.statLabel}>Duration</Text>
-  //         </View>
-  //       </View>
-  //       <View style={styles.statsRow}>
-  //         <View style={styles.statItem}>
-  //           <Icon name="speed" size={24} color="#3088C7" />
-  //           <Text style={styles.statValue}>{formatDistance(averageDistance)}</Text>
-  //           <Text style={styles.statLabel}>Avg Distance</Text>
-  //         </View>
-  //       </View>
-  //     </View>
-  //   );
-  // };
   const renderStatsCard = () => {
     // Get the displayedTotalDistance from pageStats if available
     const displayedDistance = trackingData?.pageStats?.displayedDistanceDisplay ||
@@ -1381,92 +1359,99 @@ const UserTrackingHistory = ({ navigation, route }) => {
 
     // Format the distance if it's a number and not already formatted
     const distanceText = trackingData?.pageStats?.displayedDistanceDisplay ||
-      (typeof displayedDistance === 'number' ? formatDistance(displayedDistance) : displayedDistance);
+      (typeof displayedDistance === 'number' ? formatDistanceKm(displayedDistance) : displayedDistance);
 
     const totalSessions = trackingData?.pageStats?.displayedSessions ||
       (trackingData?.sessions || []).length;
 
     return (
-      <View style={styles.statsCardContainer}>
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Icon name="access-time" size={24} color="#3088C7" />
-            <Text style={styles.statValue}>{totalSessions}</Text>
-            <Text style={styles.statLabel}>Sessions</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Icon name="straighten" size={24} color="#3088C7" />
-            <Text style={styles.statValue}>{distanceText}</Text>
-            <Text style={styles.statLabel}>Distance</Text>
-          </View>
+      <View style={styles.summaryCard}>
+        <Icon2 name="bicycle" size={34} color="#fff" />
+        <Text style={styles.summaryDistance}>{distanceText}</Text>
+        <Text style={styles.summaryLabel}>Total Traveled Distance</Text>
+        <View style={styles.sessionCountBadge}>
+          <Text style={styles.sessionCountText}>{totalSessions} Sessions</Text>
         </View>
       </View>
     );
   };
 
-  // Render session item
-  const renderSessionItem = ({ item, index }) => (
-    <TouchableOpacity
-      style={styles.sessionItem}
-      onPress={() => {
-        console.log('👉 Session item pressed:', {
-          sessionId: item.sessionId,
-          date: item.startTime
-        });
-        navigation.navigate('SessionDetailMap', {
-          userId: userId,
-          sessionId: item.sessionId,
-          sessionDate: item.startTime,
-        });
-      }}
-    >
-      <View style={styles.sessionHeader}>
-        <View style={styles.sessionDateContainer}>
-          <Icon name="event" size={16} color="#3088C7" />
-          <Text style={styles.sessionDate}>{formatDate(item.startTime)}</Text>
-        </View>
-        <View style={styles.sessionIdContainer}>
-          <Text style={styles.sessionId}>#{index + 1}</Text>
-        </View>
-      </View>
-      <View style={styles.sessionDetails}>
-        <View style={styles.sessionTimeRow}>
-          <View style={styles.sessionTimeItem}>
-            <Icon name="play-arrow" size={16} color="#4CAF50" />
-            <Text style={styles.sessionTimeLabel}>Start:</Text>
-            <Text style={styles.sessionTime}>{formatTime(item.startTime)}</Text>
+  // Render session item - REDESIGNED to match example code
+  const renderSessionItem = ({ item, index }) => {
+    const isActive = !item.endTime;
+    const start = formatTime(item.startTime);
+    const end = isActive ? 'Active' : formatTime(item.endTime);
+    const distance = item.totalDistance ?? 0;
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.card,
+          isActive ? styles.cardActive : styles.cardInactive,
+        ]}
+        onPress={() => {
+          console.log('👉 Session item pressed:', {
+            sessionId: item.sessionId,
+            date: item.startTime
+          });
+          navigation.navigate('SessionDetailMap', {
+            userId: userId,
+            sessionId: item.sessionId,
+            sessionDate: item.startTime,
+          });
+        }}
+        activeOpacity={0.7}
+      >
+        {/* Top time strip */}
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderIconWrap}>
+            <Icon2 name="clock-o" size={16} color="#2563eb" />
           </View>
-          <View style={styles.sessionTimeItem}>
-            <Icon name="stop" size={16} color="#F44336" />
-            <Text style={styles.sessionTimeLabel}>End:</Text>
-            <Text style={styles.sessionTime}>{formatTime(item.endTime)}</Text>
-          </View>
+          <Text style={styles.cardHeaderTime}>
+            {start} - {end}
+          </Text>
         </View>
-        <View style={styles.sessionStatsRow}>
-          <View style={styles.sessionStatItem}>
-            <Icon name="timer" size={14} color="#666" />
-            <Text style={styles.sessionStatLabel}>Duration:</Text>
-            <Text style={styles.sessionStatValue}>
-              {formatDuration(item.duration)}
-            </Text>
+
+        {/* Divider */}
+        <View style={styles.cardDivider} />
+
+        {/* Delivery stations */}
+        <View style={styles.infoRow}>
+          <View style={styles.roundIconBlue}>
+            <Icon2 name="bicycle" size={16} color="#0f5fc5" />
           </View>
-          <View style={styles.sessionStatItem}>
-            <Icon name="straighten" size={14} color="#666" />
-            <Text style={styles.sessionStatLabel}>Distance:</Text>
-            <Text style={styles.sessionStatValue}>
-              {formatDistance(item.totalDistance)}
-            </Text>
-          </View>
+          <Text style={styles.infoText}>
+            Delivery Stations: {item.deliveryStations ?? 0}
+          </Text>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+
+        {/* Distance */}
+        <View style={styles.infoRow}>
+          <View style={styles.roundIconOrange}>
+            <Icon2 name="road" size={16} color="#f97316" />
+          </View>
+          <Text style={styles.infoText}>
+            Travelled Distance: {formatDistanceKm(distance)}
+          </Text>
+        </View>
+
+        {/* View details button */}
+        <View style={styles.detailsButton}>
+          <Icon2 name="user" size={16} color="#2563eb" />
+          <Text style={styles.detailsText}>View Details</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   // Render empty sessions
   const renderEmptySessions = () => (
-    <View style={styles.emptySessions}>
-      <Icon name="location-off" size={48} color="#ccc" />
-      <Text style={styles.emptySessionsText}>No tracking sessions found for this date</Text>
+    <View style={styles.empty}>
+      <Icon2 name="history" size={50} color="#d1d5db" />
+      <Text style={styles.emptyText}>No tracking sessions</Text>
+      <Text style={styles.emptySubtext}>
+        for {formatHeaderDate(selectedDate)}
+      </Text>
     </View>
   );
 
@@ -1475,59 +1460,51 @@ const UserTrackingHistory = ({ navigation, route }) => {
     if (!calendarVisible) return null;
 
     return (
-      <View style={styles.calendarPopupContainer}>
-        <View style={styles.calendarPopup}>
+      <View style={styles.modalContainer}>
+        <View style={styles.calendarContainer}>
           <View style={styles.calendarHeader}>
             <Text style={styles.calendarTitle}>Select Date</Text>
-            <TouchableOpacity
-              onPress={() => setCalendarVisible(false)}
-              style={styles.closeButton}
-            >
-              <Icon name="close" size={24} color="#666" />
+            <TouchableOpacity onPress={() => setCalendarVisible(false)} style={styles.closeButton}>
+              <Icon2 name="times" size={20} color="#666" />
             </TouchableOpacity>
           </View>
+
           <Calendar
             onDayPress={onDayPress}
             markedDates={markedDates}
             markingType={'multi-dot'}
             theme={{
-              backgroundColor: '#FFFFFF',
-              calendarBackground: '#FFFFFF',
-              textSectionTitleColor: '#3088C7',
-              selectedDayBackgroundColor: '#3088C7',
-              selectedDayTextColor: '#FFFFFF',
-              todayTextColor: '#3088C7',
+              backgroundColor: '#ffffff',
+              calendarBackground: '#ffffff',
+              textSectionTitleColor: '#b6c1cd',
+              selectedDayBackgroundColor: '#ff9f1c',
+              selectedDayTextColor: '#ffffff',
+              todayTextColor: '#ff9f1c',
               dayTextColor: '#2d4150',
               textDisabledColor: '#d9e1e8',
-              dotColor: '#3088C7',
-              selectedDotColor: '#FFFFFF',
-              arrowColor: '#3088C7',
-              monthTextColor: '#3088C7',
-              textDayFontFamily: 'Poppins-Regular',
-              textMonthFontFamily: 'Poppins-Bold',
-              textDayHeaderFontFamily: 'Poppins-Medium',
+              dotColor: '#2563eb',
+              selectedDotColor: '#ffffff',
+              arrowColor: '#2563eb',
+              monthTextColor: '#2563eb',
+              indicatorColor: '#2563eb',
+              textDayFontWeight: '300',
+              textMonthFontWeight: 'bold',
+              textDayHeaderFontWeight: '300',
               textDayFontSize: 14,
               textMonthFontSize: 16,
               textDayHeaderFontSize: 12,
             }}
             style={styles.calendar}
-            renderArrow={(direction) => (
-              <Icon
-                name={`chevron-${direction}`}
-                size={24}
-                color="#3088C7"
-              />
-            )}
           />
 
           {/* Calendar Legend */}
-          <View style={styles.calendarLegend}>
+          <View style={styles.legendContainer}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#3088C7' }]} />
+              <View style={[styles.legendDot, { backgroundColor: '#2563eb' }]} />
               <Text style={styles.legendText}>Has tracking data</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
+              <View style={[styles.legendDot, { backgroundColor: '#ff9f1c' }]} />
               <Text style={styles.legendText}>Today</Text>
             </View>
           </View>
@@ -1548,8 +1525,8 @@ const UserTrackingHistory = ({ navigation, route }) => {
           titleColor="#ffffff"
           iconColor="#ffffff"
         />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3088C7" />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#2563eb" />
           <Text style={styles.loadingText}>Loading tracking data...</Text>
         </View>
       </View>
@@ -1598,13 +1575,13 @@ const UserTrackingHistory = ({ navigation, route }) => {
           data={trackingData.sessions || []}
           renderItem={renderSessionItem}
           keyExtractor={(item, index) => item.sessionId || index.toString()}
-          contentContainerStyle={styles.listContainer}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <>
               {/* Stats Card */}
               {renderStatsCard()}
-                            
+              
               {/* Sessions Header */}
               <View style={styles.sessionsHeader}>
                 <Text style={styles.sectionTitle}>Session Details</Text>
@@ -1616,7 +1593,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
-              colors={['#3088C7']}
+              colors={['#2563eb']}
             />
           }
         />
@@ -1628,18 +1605,18 @@ const UserTrackingHistory = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#f4f6f8',
   },
-  loadingContainer: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
     marginTop: 10,
-    fontSize: 14,
+    fontSize: 16,
+    color: '#6b7280',
     fontFamily: 'Poppins-Regular',
-    color: '#666',
   },
   errorContainer: {
     padding: 20,
@@ -1666,64 +1643,144 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Poppins-Medium',
   },
-  listContainer: {
+  listContent: {
     padding: 16,
-    flexGrow: 1,
+    paddingBottom: 32,
   },
-  statsCardContainer: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 15,
-  },
-  statItem: {
+  
+  // Summary Card - Redesigned
+  summaryCard: {
+    borderRadius: 18,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    marginBottom: 20,
     alignItems: 'center',
-    flex: 1,
+    backgroundColor: '#ff9f1c',
+    shadowColor: '#f97316',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 6,
   },
-  statValue: {
-    fontSize: 16,
+  summaryDistance: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#fff',
+    marginTop: 8,
     fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginTop: 5,
   },
-  statLabel: {
-    fontSize: 11,
+  summaryLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
     fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginTop: 2,
   },
-  selectedDateInfo: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+  sessionCountBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  selectedDateHeader: {
+  sessionCountText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+  },
+  
+  // Session Card - Redesigned to match example
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    marginBottom: 14,
+    borderLeftWidth: 4,
+    shadowColor: '#93c5fd',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  cardInactive: {
+    borderLeftColor: '#0f5fc5', // blue for completed sessions
+  },
+  cardActive: {
+    borderLeftColor: '#22c55e', // green for active session
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingBottom: 10,
   },
-  selectedDateText: {
-    fontSize: 16,
+  cardHeaderIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#e5f0ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  cardHeaderTime: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#566000',
     fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginLeft: 8,
-    flex: 1,
   },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  infoText: {
+    marginLeft: 10,
+    fontSize: 13,
+    color: '#4b5563',
+    fontFamily: 'Poppins-Regular',
+  },
+  roundIconBlue: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#e0ecff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  roundIconOrange: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#fff3e6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailsButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f9fbff',
+    borderRadius: 20,
+    paddingVertical: 10,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#d0e0ff',
+  },
+  detailsText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563eb',
+    fontFamily: 'Poppins-Medium',
+  },
+  
   sessionsHeader: {
     marginBottom: 10,
   },
@@ -1732,161 +1789,78 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Bold',
     color: '#333',
   },
-  sessionCount: {
-    backgroundColor: '#E3F2FD',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  sessionCountText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    color: '#3088C7',
-  },
-  sessionItem: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  sessionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  
+  // Empty State
+  empty: {
     alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
+    marginTop: 40,
+    padding: 20,
   },
-  sessionDateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sessionDate: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginLeft: 6,
-  },
-  sessionIdContainer: {
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  sessionId: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    color: '#666',
-  },
-  sessionDetails: {},
-  sessionTimeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  sessionTimeItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sessionTimeLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginLeft: 4,
-  },
-  sessionTime: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    color: '#333',
-    marginLeft: 4,
-  },
-  sessionStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  sessionStatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sessionStatLabel: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginLeft: 4,
-  },
-  sessionStatValue: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginLeft: 4,
-  },
-  emptySessions: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-  },
-  emptySessionsText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    color: '#999',
+  emptyText: {
     marginTop: 10,
+    fontSize: 16,
+    color: '#6b7280',
+    fontFamily: 'Poppins-Medium',
   },
-  // Calendar Popup Styles
-  calendarPopupContainer: {
+  emptySubtext: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#9ca3af',
+    fontFamily: 'Poppins-Regular',
+  },
+
+  // Calendar Modal Styles - Redesigned
+  modalContainer: {
     position: 'absolute',
-    top: 60, // Adjust based on your header height
+    top: 60,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     zIndex: 1000,
   },
-  calendarPopup: {
-    backgroundColor: '#FFF',
-    margin: 20,
-    borderRadius: 12,
-    padding: 15,
-    elevation: 5,
+  calendarContainer: {
+    width: '90%',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
+    elevation: 5,
   },
   calendarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
-    paddingBottom: 10,
+    marginBottom: 16,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#e5e7eb',
   },
   calendarTitle: {
     fontSize: 18,
+    fontWeight: '600',
+    color: '#2563eb',
     fontFamily: 'Poppins-Bold',
-    color: '#333',
   },
   closeButton: {
-    padding: 4,
+    padding: 8,
   },
   calendar: {
     borderRadius: 10,
     overflow: 'hidden',
   },
-  calendarLegend: {
+  legendContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 15,
-    paddingTop: 15,
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    borderTopColor: '#e5e7eb',
   },
   legendItem: {
     flexDirection: 'row',
@@ -1896,12 +1870,12 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    marginRight: 6,
+    marginRight: 8,
   },
   legendText: {
-    fontSize: 11,
+    fontSize: 12,
+    color: '#4b5563',
     fontFamily: 'Poppins-Regular',
-    color: '#666',
   },
 });
 

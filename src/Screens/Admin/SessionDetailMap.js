@@ -3,18 +3,39 @@ import {
   View,
   Text,
   StyleSheet,
-  StatusBar,
   ActivityIndicator,
   TouchableOpacity,
-  ScrollView,
   Dimensions,
+  Image,
   Platform,
+  FlatList,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import Icon from 'react-native-vector-icons/FontAwesome';
+import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { getSessionDetails } from '../../config/AdminService';
+import FancyAlert from '../FancyAlert';
+import Api from '../../config/Api';
+import CustomHeader from '../../Component/CustomHeader';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+
+// Simple haversine-distance helper (meters)
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3;
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+};
 
 const normalizeTimestamp = (value) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -30,468 +51,433 @@ const normalizeTimestamp = (value) => {
       return parsed;
     }
   }
-  return 0;
+  return Date.now();
 };
 
-const toFiniteNumber = (v) => {
-  const n = typeof v === 'number' ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
-};
+const MAX_TELEPORT_DISTANCE_METERS = 500;
+const MAX_REALISTIC_SPEED_MPS = 70;
 
-const buildCleanSortedCoordinates = (locations) => {
-  if (!Array.isArray(locations) || locations.length === 0) return [];
+/**
+ * Splits locations into contiguous segments by isOnline status and also
+ * breaks segments when there is a large jump, so we don't draw a long
+ * straight polyline between distant points (e.g. end point → last foreground point).
+ */
+const segmentLocationsByOnlineStatus = (locations) => {
+  if (!locations || locations.length < 2) return [];
 
-  const withCoords = locations
-    .map((loc) => {
-      const latitude = toFiniteNumber(loc?.latitude);
-      const longitude = toFiniteNumber(loc?.longitude);
-      const t = normalizeTimestamp(
-        loc?.timestamp ?? loc?.time ?? loc?.createdAt ?? loc?.updatedAt
-      );
-      if (latitude == null || longitude == null) return null;
-      return { latitude, longitude, _t: t };
-    })
-    .filter(Boolean);
+  const segments = [];
+  let currentSegment = {
+    coordinates: [
+      { latitude: locations[0].latitude, longitude: locations[0].longitude },
+    ],
+    isOnline: locations[0]?.isOnline ?? true,
+  };
 
-  // If timestamps are missing/zero, keep incoming order; otherwise sort by time.
-  const hasAnyTimestamp = withCoords.some((p) => p._t && p._t > 0);
-  const sorted = hasAnyTimestamp
-    ? [...withCoords].sort((a, b) => (a._t || 0) - (b._t || 0))
-    : withCoords;
+  for (let i = 1; i < locations.length; i++) {
+    const loc = locations[i];
+    const locOnline = loc?.isOnline ?? true;
+    const point = { latitude: loc.latitude, longitude: loc.longitude };
 
-  // De-dup consecutive identical points (common when API includes marker points).
-  const deduped = [];
-  for (const p of sorted) {
-    const prev = deduped[deduped.length - 1];
-    if (prev && prev.latitude === p.latitude && prev.longitude === p.longitude) {
+    const prevPoint =
+      currentSegment.coordinates[currentSegment.coordinates.length - 1];
+    const distance = calculateDistance(
+      prevPoint.latitude,
+      prevPoint.longitude,
+      point.latitude,
+      point.longitude
+    );
+    const prevLoc = locations[i - 1];
+    const prevTimestamp = normalizeTimestamp(prevLoc?.timestamp);
+    const currentTimestamp = normalizeTimestamp(loc?.timestamp);
+    const elapsedMs = Math.max(1, currentTimestamp - prevTimestamp);
+    const speedMps = distance / (elapsedMs / 1000);
+    const looksLikeTeleport =
+      distance > MAX_TELEPORT_DISTANCE_METERS && speedMps > MAX_REALISTIC_SPEED_MPS;
+
+    if (looksLikeTeleport) {
+      if (currentSegment.coordinates.length >= 2) {
+        segments.push({
+          ...currentSegment,
+          coordinates: [...currentSegment.coordinates],
+        });
+      }
+      currentSegment = {
+        coordinates: [point],
+        isOnline: locOnline,
+      };
       continue;
     }
-    deduped.push(p);
+
+    if (locOnline === currentSegment.isOnline) {
+      currentSegment.coordinates.push(point);
+    } else {
+      if (currentSegment.coordinates.length >= 2) {
+        segments.push({
+          ...currentSegment,
+          coordinates: [...currentSegment.coordinates],
+        });
+      }
+      const lastCoord =
+        currentSegment.coordinates[currentSegment.coordinates.length - 1];
+      currentSegment = {
+        coordinates: [lastCoord, point],
+        isOnline: locOnline,
+      };
+    }
   }
 
-  return deduped.map(({ latitude, longitude }) => ({ latitude, longitude }));
+  if (currentSegment.coordinates.length >= 2) {
+    segments.push(currentSegment);
+  }
+
+  return segments;
 };
 
-const SessionDetailMap = ({ navigation, route }) => {
+const buildPhotoUrl = (rawUrl) => {
+  if (!rawUrl) return null;
+  if (typeof rawUrl !== 'string') rawUrl = String(rawUrl);
+  if (rawUrl.startsWith('file://') || rawUrl.startsWith('/')) {
+    return rawUrl.startsWith('file://') ? rawUrl : `file://${rawUrl}`;
+  }
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    return rawUrl;
+  }
+  const base = (Api?.defaults?.baseURL || '').replace(/\/+$/, '');
+  const path = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`;
+  return `${base}${path}`;
+};
+
+const SessionDetailsMap = () => {
+  const navigation = useNavigation();
+  const route = useRoute();
   const { userId, sessionId, sessionDate } = route.params || {};
-  const mapRef = useRef(null);
   
   const [sessionData, setSessionData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showTimeline, setShowTimeline] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({ title: '', message: '', type: 'error' });
+  const mapRef = useRef(null);
 
-  const polylineCoordinates = useMemo(
-    () => buildCleanSortedCoordinates(sessionData?.locations),
-    [sessionData?.locations]
-  );
-
-  // Fetch session details
   const fetchSessionDetails = useCallback(async () => {
+    if (!userId || !sessionId) return;
+    
+    setLoading(true);
     try {
-      setIsLoading(true);
-      setError(null);
-
-      if (!userId || !sessionId) {
-        setError('User ID or Session ID not found.');
-        setIsLoading(false);
-        return;
-      }
-
       const response = await getSessionDetails(userId, sessionId);
-
+      
       if (response.success && response.data) {
         setSessionData(response.data);
       } else {
-        setError(response.message || 'Failed to fetch session details');
+        setAlertConfig({
+          title: 'Error',
+          message: response.message || 'Failed to fetch session details',
+          type: 'error',
+        });
+        setAlertVisible(true);
       }
     } catch (err) {
-      setError('Something went wrong while fetching session data');
       console.error('Error fetching session details:', err);
+      setAlertConfig({
+        title: 'Error',
+        message: err?.message || 'Something went wrong while fetching session data',
+        type: 'error',
+      });
+      setAlertVisible(true);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }, [userId, sessionId]);
 
-  // Initial fetch
   useEffect(() => {
     fetchSessionDetails();
-    navigation.setOptions({ 
-      title: sessionDate ? `Session: ${sessionDate}` : 'Session Details' 
-    });
-  }, [fetchSessionDetails, navigation, sessionDate]);
+  }, [fetchSessionDetails]);
 
-  // Fit map once we have a cleaned route polyline (preferred).
+  const locations = sessionData?.locations ?? [];
+
+  // Normalise & sort locations
+  const locationsWithCoords = locations.filter(
+    (l) => l?.latitude != null && l?.longitude != null
+  );
+  const sortedLocationsWithCoords = [...locationsWithCoords].sort((a, b) => {
+    const ta = normalizeTimestamp(a.timestamp ?? a.time ?? a.createdAt);
+    const tb = normalizeTimestamp(b.timestamp ?? b.time ?? b.createdAt);
+    return ta - tb;
+  });
+
+  const coordinates = sortedLocationsWithCoords.map((l) => ({
+    latitude: Number(l.latitude),
+    longitude: Number(l.longitude),
+  }));
+
+  const startCoordinate =
+    coordinates.length > 0 &&
+    Number.isFinite(coordinates[0].latitude) &&
+    Number.isFinite(coordinates[0].longitude)
+      ? coordinates[0]
+      : null;
+
+  const endCoordinate =
+    coordinates.length > 0 &&
+    Number.isFinite(coordinates[coordinates.length - 1].latitude) &&
+    Number.isFinite(coordinates[coordinates.length - 1].longitude)
+      ? coordinates[coordinates.length - 1]
+      : null;
+
+  const polylineSegments = useMemo(
+    () =>
+      segmentLocationsByOnlineStatus(
+        sortedLocationsWithCoords.map((l) => ({
+          latitude: Number(l.latitude),
+          longitude: Number(l.longitude),
+          timestamp: normalizeTimestamp(l.timestamp ?? l.time ?? l.createdAt),
+          isOnline: l?.isOnline ?? true,
+        }))
+      ),
+    [sortedLocationsWithCoords]
+  );
+
+  const photoLocations = locations.filter(
+    (l) =>
+      (l?.photoUrl ?? l?.photo ?? l?.photoPath ?? l?.photoUri) &&
+      l?.latitude != null &&
+      l?.longitude != null
+  );
+
+  const renderRouteMarkers = (keyPrefix) => (
+    <>
+      {startCoordinate && (
+        <Marker
+          key={`${keyPrefix}-start`}
+          coordinate={startCoordinate}
+          pinColor="green"
+          title="Start"
+          zIndex={1000}
+        />
+      )}
+      {endCoordinate && (
+        <Marker
+          key={`${keyPrefix}-end`}
+          coordinate={endCoordinate}
+          pinColor="#FF8C00"
+          title="End"
+          zIndex={1001}
+        />
+      )}
+      {photoLocations.map((loc, idx) => (
+        <Marker
+          key={loc.id ?? `${keyPrefix}-photo-${idx}`}
+          coordinate={{
+            latitude: Number(loc.latitude),
+            longitude: Number(loc.longitude),
+          }}
+          pinColor="#DC2626"
+          title="Photo Location"
+          description={
+            loc.remark != null ? String(loc.remark).trim() || undefined : undefined
+          }
+        />
+      ))}
+    </>
+  );
+
+  const locationsWithPhotoOrRemark = locations.filter(
+    (l) =>
+      (l?.photoUrl ?? l?.photo ?? l?.photoPath ?? l?.photoUri) ||
+      (l?.remark != null && String(l.remark).trim() !== '') ||
+      (l?.amount != null && String(l.amount).trim() !== '')
+  );
+
+  const handlePhotoCardPress = useCallback(
+    (loc) => {
+      if (!loc || !mapRef.current) return;
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      mapRef.current.animateCamera(
+        {
+          center: {
+            latitude: lat,
+            longitude: lng,
+          },
+          pitch: 0,
+          heading: 0,
+          zoom: 18,
+        },
+        { duration: 800 }
+      );
+    },
+    [mapRef]
+  );
+
   useEffect(() => {
-    if (!mapRef.current) return;
-    if (!polylineCoordinates || polylineCoordinates.length < 2) return;
-    // Small delay to ensure map is laid out before fitting.
-    const t = setTimeout(() => {
+    if (!sessionData || coordinates.length < 2 || !mapRef.current) return;
+    
+    const timer = setTimeout(() => {
       try {
-        mapRef.current?.fitToCoordinates(polylineCoordinates, {
-          edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        mapRef.current?.fitToCoordinates(coordinates, {
+          edgePadding: { top: 48, right: 48, bottom: 48, left: 48 },
           animated: true,
         });
       } catch (e) {
-        // ignore fit errors (rare on initial mount)
+        console.warn('Failed to fit map to coordinates:', e);
       }
     }, 300);
-    return () => clearTimeout(t);
-  }, [polylineCoordinates]);
-
-  // Fallback fit using API bounds when route points are missing.
-  useEffect(() => {
-    if (!mapRef.current) return;
-    if (polylineCoordinates && polylineCoordinates.length >= 2) return;
-    const bounds = sessionData?.bounds;
-    if (!bounds) return;
-    const t = setTimeout(() => {
-      try {
-        mapRef.current?.fitToCoordinates(
-          [
-            { latitude: bounds.north, longitude: bounds.east },
-            { latitude: bounds.south, longitude: bounds.west },
-          ],
-          { edgePadding: { top: 50, right: 50, bottom: 50, left: 50 }, animated: true }
-        );
-      } catch (e) {
-        // ignore
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [sessionData?.bounds, polylineCoordinates]);
-
-  // Format duration
-  const formatDuration = (seconds) => {
-    if (!seconds) return '0s';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
     
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${secs}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${secs}s`;
-    }
-    return `${secs}s`;
-  };
+    return () => clearTimeout(timer);
+  }, [sessionData?.id, coordinates.length]);
 
-  // Format distance
-  const formatDistance = (distance) => {
-    if (!distance) return '0 km';
-    return `${distance.toFixed(2)} km`;
-  };
+  if (!userId || !sessionId) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Missing user or session ID</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.backBtnText}>Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
-  // Format speed
-  const formatSpeed = (speed) => {
-    if (!speed) return '0 km/h';
-    return `${speed.toFixed(2)} km/h`;
-  };
+  if (loading && !sessionData) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#438AFF" />
+        <Text style={styles.loadingText}>Loading session details...</Text>
+      </View>
+    );
+  }
 
-  // Check if location has a photo
-  const hasPhoto = (location) => {
-    return location.photo && location.photo !== null;
-  };
+  if (!sessionData) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Session not found</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.backBtnText}>Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
-  // Filter locations for markers (only start, end, and photo locations)
-  const getMarkerLocations = () => {
-    if (!sessionData?.locations) return [];
-    
-    return sessionData.locations.filter(location => {
-      // Keep start marker
-      if (location.markerType === 'start') return true;
-      // Keep end marker
-      if (location.markerType === 'end') return true;
-      // Keep locations with photos
-      if (hasPhoto(location)) return true;
-      // Filter out all other waypoints
-      return false;
-    });
-  };
-
-  // Get marker color based on markerType or photo presence
-  const getMarkerColor = (location) => {
-    if (hasPhoto(location)) {
-      return '#FF9800'; // Orange for photo markers
-    }
-    switch (location.markerType) {
-      case 'start':
-        return '#4CAF50'; // Green for start
-      case 'end':
-        return '#F44336'; // Red for end
-      default:
-        return '#3088C7'; // Default blue (shouldn't be used now)
-    }
-  };
-
-  // Get marker icon based on markerType or photo presence
-  const getMarkerIcon = (location) => {
-    if (hasPhoto(location)) {
-      return 'photo-camera'; // Camera icon for photo markers
-    }
-    switch (location.markerType) {
-      case 'start':
-        return 'play-arrow';
-      case 'end':
-        return 'stop';
-      default:
-        return 'place';
-    }
-  };
-
-  // Get marker title
-  const getMarkerTitle = (location) => {
-    if (hasPhoto(location)) {
-      return 'Photo Location';
-    }
-    switch (location.markerType) {
-      case 'start':
-        return 'Start Point';
-      case 'end':
-        return 'End Point';
-      default:
-        return 'Location';
-    }
-  };
-
-  // Generate coordinates for polyline
-  const getPolylineCoordinates = () => {
-    return polylineCoordinates || [];
-  };
-
-  // Calculate initial region
-  const getInitialRegion = () => {
-    if (!polylineCoordinates || polylineCoordinates.length === 0) {
-      return {
-        latitude: 16.7332,
-        longitude: 74.1282,
+  const region = coordinates.length
+    ? {
+        latitude: coordinates[0].latitude,
+        longitude: coordinates[0].longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
-      };
-    }
+      }
+    : null;
 
-    const firstLocation = polylineCoordinates[0];
-    return {
-      latitude: firstLocation.latitude,
-      longitude: firstLocation.longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    };
-  };
-
-  // Render stats card
-  const renderStatsCard = () => {
-    if (!sessionData?.stats) return null;
-    const { stats } = sessionData;
-
-    return (
-      <View style={styles.statsCard}>
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Icon name="access-time" size={20} color="#3088C7" />
-            <Text style={styles.statValue}>{formatDuration(stats.duration)}</Text>
-            <Text style={styles.statLabel}>Duration</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Icon name="straighten" size={20} color="#3088C7" />
-            <Text style={styles.statValue}>{formatDistance(stats.totalDistance)}</Text>
-            <Text style={styles.statLabel}>Distance</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Icon name="speed" size={20} color="#3088C7" />
-            <Text style={styles.statValue}>{formatSpeed(stats.averageSpeed)}</Text>
-            <Text style={styles.statLabel}>Avg Speed</Text>
-          </View>
-        </View>
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Icon name="location-on" size={20} color="#3088C7" />
-            <Text style={styles.statValue}>{stats.totalLocations || 0}</Text>
-            <Text style={styles.statLabel}>Locations</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Icon name="battery-std" size={20} color="#3088C7" />
-            <Text style={styles.statValue}>{stats.batteryDrain || 0}%</Text>
-            <Text style={styles.statLabel}>Battery Drain</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Icon name="photo-library" size={20} color="#3088C7" />
-            <Text style={styles.statValue}>{stats.totalPhotos || 0}</Text>
-            <Text style={styles.statLabel}>Photos</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  // Render timeline
-  const renderTimeline = () => {
-    if (!sessionData?.timeline || sessionData.timeline.length === 0) return null;
-
-    return (
-      <View style={styles.timelineContainer}>
-        <Text style={styles.sectionTitle}>Timeline</Text>
-        {sessionData.timeline.map((item, index) => (
-          <View key={index} style={styles.timelineItem}>
-            <View style={styles.timelineIcon}>
-              <Icon name="circle" size={12} color="#3088C7" />
-              {index < sessionData.timeline.length - 1 && (
-                <View style={styles.timelineLine} />
-              )}
-            </View>
-            <View style={styles.timelineContent}>
-              <Text style={styles.timelineTime}>{item.time}</Text>
-              <Text style={styles.timelineAddress} numberOfLines={2}>
-                {item.address || 'Unknown Address'}
-              </Text>
-              {item.speed !== undefined && (
-                <Text style={styles.timelineSpeed}>
-                  Speed: {formatSpeed(item.speed)}
-                </Text>
-              )}
-              {item.battery !== undefined && (
-                <Text style={styles.timelineBattery}>
-                  Battery: {item.battery}%
-                </Text>
-              )}
-            </View>
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3088C7" />
-          <Text style={styles.loadingText}>Loading session details...</Text>
-        </View>
-      </View>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
-        <View style={styles.errorContainer}>
-          <Icon name="error-outline" size={48} color="#F44336" />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={fetchSessionDetails}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  // Get markers to display (only start, end, and photo locations)
-  const markerLocations = getMarkerLocations();
+  const userName = sessionData?.userName || sessionData?.employeeName || '';
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
-      
-      {/* Map Container */}
-      <View style={styles.mapContainer}>
-        <MapView
-          ref={mapRef}
-          style={styles.map}
-          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : null}
-          initialRegion={getInitialRegion()}
-          showsUserLocation={false}
-          showsMyLocationButton={true}
-          showsCompass={true}
-          mapPadding={{ top: 0, right: 0, bottom: 0, left: 0 }}
-        >
-          {/* Polyline for route */}
-          <Polyline
-            coordinates={getPolylineCoordinates()}
-            strokeColor="#3088C7"
-            strokeWidth={4}
-            lineDashPattern={null}
-          />
-          
-          {/* Markers only for start, end, and photo locations */}
-          {markerLocations.map((location, index) => (
-            <Marker
-              key={location.id || index}
-              coordinate={{
-                latitude: location.latitude,
-                longitude: location.longitude,
-              }}
-              title={getMarkerTitle(location)}
-              description={location.address || ''}
+      <CustomHeader
+        navigation={navigation}
+        title={userName || 'Session Details'}
+        showBackButton={true}
+        showCrossButton={true}
+      />
+
+      {region && coordinates.length > 0 ? (
+        <View style={styles.content}>
+          <View style={styles.mapTopContainer}>
+            <MapView
+              ref={mapRef}
+              style={styles.map}
+              provider={PROVIDER_GOOGLE}
+              initialRegion={region}
+              mapType="standard"
+              showsUserLocation={false}
             >
-              <View style={[
-                styles.markerContainer,
-                { backgroundColor: getMarkerColor(location) }
-              ]}>
-                <Icon 
-                  name={getMarkerIcon(location)} 
-                  size={16} 
-                  color="#FFF" 
+              {polylineSegments.map((seg, idx) => (
+                <Polyline
+                  key={`polyline-${idx}`}
+                  coordinates={seg.coordinates}
+                  strokeColor={seg.isOnline ? '#438AFF' : '#DC2626'}
+                  strokeWidth={4}
                 />
-              </View>
-            </Marker>
-          ))}
+              ))}
+              {renderRouteMarkers('main')}
+            </MapView>
+          </View>
 
-          {/* Optional: Show photo count if there are multiple photos at same location */}
-          {markerLocations.filter(loc => hasPhoto(loc)).map((location, index) => {
-            // This would require additional logic to count photos per location
-            // For now, just showing the marker is sufficient
-            return null;
-          })}
-        </MapView>
+          {locationsWithPhotoOrRemark.length > 0 && (
+            <View style={styles.photoCarouselSection}>
+              <FlatList
+                style={{ flex: 1 }}
+                horizontal
+                data={locationsWithPhotoOrRemark}
+                keyExtractor={(loc, index) => String(loc.id ?? index)}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoCarouselContent}
+                renderItem={({ item: loc }) => {
+                  const rawPhoto =
+                    loc.photoUrl ?? loc.photo ?? loc.photoPath ?? loc.photoUri;
+                  const photoUrl = buildPhotoUrl(rawPhoto);
+                  const remark =
+                    loc.remark != null ? String(loc.remark).trim() : '';
+                  const label = remark || 'Location';
 
-        {/* Marker Legend */}
-        <View style={styles.legendContainer}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
-            <Text style={styles.legendText}>Start</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#F44336' }]} />
-            <Text style={styles.legendText}>End</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#FF9800' }]} />
-            <Text style={styles.legendText}>Photo</Text>
-          </View>
+                  return (
+                    <TouchableOpacity
+                      style={styles.photoCard}
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        if (photoUrl) {
+                          handlePhotoCardPress(loc);
+                          navigation.navigate('FullImageScreen', {
+                            imageUrl: photoUrl,
+                          });
+                        }
+                      }}
+                    >
+                      {photoUrl ? (
+                        <Image
+                          source={{ uri: photoUrl }}
+                          style={styles.photoCardImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.photoCardImage,
+                            styles.photoAvatarPlaceholder,
+                          ]}
+                        >
+                          <Icon name="image" size={24} color="#9ca3af" />
+                        </View>
+                      )}
+                      <View style={styles.photoCardInfo}>
+                        <Text style={styles.photoCardLabelTitle}>
+                          Location Name:{' '}
+                        </Text>
+                        <Text
+                          style={styles.photoCardLabelValue}
+                          numberOfLines={1}
+                        >
+                          {label}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </View>
+          )}
         </View>
+      ) : (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>No route data available</Text>
+        </View>
+      )}
 
-        {/* Toggle Timeline Button */}
-        <TouchableOpacity 
-          style={styles.timelineToggle}
-          onPress={() => setShowTimeline(!showTimeline)}
-        >
-          <Icon 
-            name={showTimeline ? 'map' : 'history'} 
-            size={24} 
-            color="#FFF" 
-          />
-          <Text style={styles.timelineToggleText}>
-            {showTimeline ? 'Show Map' : 'Show Timeline'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Bottom Sheet Content */}
-      <ScrollView style={styles.bottomSheet} showsVerticalScrollIndicator={false}>
-        {/* Stats Card */}
-        {renderStatsCard()}
-
-        {/* Timeline (collapsible) */}
-        {showTimeline && renderTimeline()}
-      </ScrollView>
+      <FancyAlert
+        visible={alertVisible}
+        onClose={() => setAlertVisible(false)}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+      />
     </View>
   );
 };
@@ -499,202 +485,95 @@ const SessionDetailMap = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#f8f9fa',
   },
-  loadingContainer: {
+  content: {
+    flex: 1,
+  },
+  centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8f9fa',
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    marginTop: hp(1),
+    fontSize: wp(4),
+    color: '#6b7280',
   },
   errorText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    color: '#F44336',
-    textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 20,
+    fontSize: wp(4),
+    color: '#C6303E',
   },
-  retryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#3088C7',
-    borderRadius: 8,
+  backBtn: {
+    marginTop: hp(2),
+    paddingVertical: hp(1),
+    paddingHorizontal: wp(4),
   },
-  retryButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
+  backBtnText: {
+    fontSize: wp(4),
+    color: '#438AFF',
+    fontWeight: '500',
   },
-  mapContainer: {
-    height: height * 0.45,
+  mapTopContainer: {
+    flex: 7,
     width: '100%',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#e5e7eb',
   },
   map: {
-    flex: 1,
+    width: '100%',
+    height: '100%',
   },
-  markerContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  photoCarouselSection: {
+    flex: 3,
+    paddingVertical: hp(0.5),
+  },
+  photoCarouselContent: {
+    paddingHorizontal: wp(2),
+  },
+  photoCard: {
+    width: wp(40),
+    backgroundColor: '#ffffff',
+    paddingVertical: hp(2),
+    alignItems: 'center',
+    marginHorizontal: wp(2),
+    marginVertical: hp(3),
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  photoCardImage: {
+    width: wp(18),
+    height: wp(18),
+    borderRadius: wp(9),
+    backgroundColor: '#f3f4f6',
+    overflow: 'hidden',
+    marginBottom: hp(1.5),
+  },
+  photoCardInfo: {
+    alignItems: 'center',
+  },
+  photoCardLabelTitle: {
+    fontSize: wp(3),
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  photoCardLabelValue: {
+    fontSize: wp(3),
+    color: '#4b5563',
+    textAlign: 'center',
+    marginTop: hp(0.5),
+  },
+  photoAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  legendContainer: {
-    position: 'absolute',
-    top: 15,
-    left: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 8,
-    padding: 8,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 2,
-  },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  legendText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Regular',
-    color: '#333',
-  },
-  timelineToggle: {
-    position: 'absolute',
-    bottom: 15,
-    right: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#3088C7',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 25,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  timelineToggleText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    marginLeft: 6,
-  },
-  bottomSheet: {
-    flex: 1,
-    backgroundColor: '#FFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -20,
-    paddingTop: 20,
-    paddingHorizontal: 15,
-    paddingBottom: 30,
-  },
-  statsCard: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 15,
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginTop: 5,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginTop: 2,
-  },
-  timelineContainer: {
-    marginTop: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: 'Poppins-Bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  timelineIcon: {
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  timelineLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: '#3088C7',
-    marginTop: 4,
-  },
-  timelineContent: {
-    flex: 1,
-  },
-  timelineTime: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Medium',
-    color: '#3088C7',
-    marginBottom: 4,
-  },
-  timelineAddress: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
-    color: '#333',
-    marginBottom: 4,
-  },
-  timelineSpeed: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginBottom: 2,
-  },
-  timelineBattery: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
   },
 });
 
-export default SessionDetailMap;
+export default SessionDetailsMap;

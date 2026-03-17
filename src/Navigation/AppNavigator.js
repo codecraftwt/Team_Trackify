@@ -264,9 +264,10 @@ const AuthenticatedStack = ({ route }) => {
       <Stack.Screen
         name="SessionDetailMap"
         component={SessionDetailMap}
-        options={props =>
-          commonScreenOptions({ ...props, title: 'Session Details' })
-        }
+        // options={props =>
+        //   commonScreenOptions({ ...props, title: 'Session Details' })
+        // }
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="AdminReport"

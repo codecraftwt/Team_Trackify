@@ -9,14 +9,16 @@ import {
   StatusBar,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import Icon2 from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../../config/auth-context';
 import { getAdminUsers } from '../../config/AdminService'; 
 
 const AdminHistory = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('active');
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,6 +70,17 @@ const AdminHistory = ({ navigation }) => {
     fetchUsers(true);
   };
 
+  // Handle add user
+  const handleAddUser = () => {
+    // Navigate to add user screen or show add user modal
+    Alert.alert('Add User', 'Navigate to add user screen', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'OK', onPress: () => console.log('Navigate to add user') }
+    ]);
+    // You can replace with actual navigation:
+    // navigation.navigate('AddUser');
+  };
+
   // Filter users based on search and active tab
   useEffect(() => {
     let result = users;
@@ -92,26 +105,30 @@ const AdminHistory = ({ navigation }) => {
     setFilteredUsers(result);
   }, [searchQuery, activeTab, users]);
 
-  // Get initials from name
-  const getInitials = (name) => {
-    if (!name) return '?';
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2);
+  // Handle edit user
+  const handleEditUser = (user) => {
+    Alert.alert('Edit User', `Edit ${user.name}`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Edit', onPress: () => console.log('Edit user:', user.id) }
+    ]);
   };
 
-  // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
+  // Handle delete user
+  const handleDeleteUser = (user) => {
+    Alert.alert(
+      'Delete User',
+      `Are you sure you want to delete ${user.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          onPress: () => {
+            console.log('Delete user:', user.id);
+          },
+          style: 'destructive'
+        }
+      ]
+    );
   };
 
   // Render user item
@@ -119,55 +136,38 @@ const AdminHistory = ({ navigation }) => {
     <TouchableOpacity 
       style={styles.userItem}
       onPress={() => {
-        // Navigate to user tracking history screen
-        // userId = selected user's ID, adminId = logged in admin's ID
         navigation.navigate('UserTrackingHistory', { 
           userId: item.id, 
           userName: item.name,
           adminId: userId
         });
       }}
+      activeOpacity={0.7}
     >
       <View style={styles.avatarContainer}>
-        <View style={[
-          styles.avatarPlaceholder, 
-          { backgroundColor: item.isActive ? '#4CAF50' : '#FF9800' }
-        ]}>
-          <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
+        <View style={styles.avatarPlaceholder}>
+          <Icon2 name="person" size={30} color="#666" />
         </View>
       </View>
+      
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.name}</Text>
         <Text style={styles.userEmail}>{item.email}</Text>
-        <View style={styles.userDetails}>
-          <View style={styles.detailItem}>
-            <Icon name="phone" size={12} color="#999" />
-            <Text style={styles.detailText}>{item.mobile_no || 'N/A'}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Icon name="event" size={12} color="#999" />
-            <Text style={styles.detailText}>{formatDate(item.registeredDate)}</Text>
-          </View>
-        </View>
       </View>
-      <View style={styles.statusContainer}>
-        <View style={[
-          styles.statusBadge,
-          { backgroundColor: item.isActive ? '#E8F5E9' : '#FFF3E0' }
-        ]}>
-          <Text style={[
-            styles.statusText,
-            { color: item.isActive ? '#4CAF50' : '#FF9800' }
-          ]}>
-            {item.isActive ? 'Active' : 'Inactive'}
-          </Text>
-        </View>
-        {item.stats?.hasSessions && (
-          <View style={styles.statsContainer}>
-            <Icon name="location-on" size={14} color="#3088C7" />
-            <Text style={styles.statsText}>Has tracking</Text>
-          </View>
-        )}
+
+      <View style={styles.actionContainer}>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => handleEditUser(item)}
+        >
+          <Icon2 name="create-outline" size={20} color="#4CAF50" />
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.actionButton}
+          onPress={() => handleDeleteUser(item)}
+        >
+          <Icon2 name="trash-outline" size={20} color="#F44336" />
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -177,7 +177,7 @@ const AdminHistory = ({ navigation }) => {
     <View style={styles.emptyState}>
       <Icon name="people-outline" size={64} color="#ccc" />
       <Text style={styles.emptyStateText}>
-        {error ? error : 'No users found'}
+        {error ? error : `No ${activeTab} users found`}
       </Text>
       {error && (
         <TouchableOpacity 
@@ -220,41 +220,42 @@ const AdminHistory = ({ navigation }) => {
         <Text style={styles.headerSubtitle}>Users under you</Text>
       </View>
 
-      {/* Search Bar */}
+      {/* Search Bar with Add User Icon on Right */}
       <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Icon name="search" size={24} color="#999" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search users..."
-            placeholderTextColor="#999"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="close" size={20} color="#999" />
-            </TouchableOpacity>
-          )}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBar}>
+            <Icon name="search" size={24} color="#999" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search Users"
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Icon name="close" size={20} color="#999" />
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.addUserButton}
+            onPress={handleAddUser}
+          >
+            <Icon2 name="person-add" size={24} color="#3088C7" />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Tabs */}
+      {/* Tabs - Only Active and Inactive */}
       <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
-          onPress={() => setActiveTab('all')}
-        >
-          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
-            All
-          </Text>
-        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'active' && styles.activeTab]}
           onPress={() => setActiveTab('active')}
         >
           <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>
-            Active
+            Active Users
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -262,16 +263,9 @@ const AdminHistory = ({ navigation }) => {
           onPress={() => setActiveTab('inactive')}
         >
           <Text style={[styles.tabText, activeTab === 'inactive' && styles.activeTabText]}>
-            Inactive
+            Inactive Users
           </Text>
         </TouchableOpacity>
-      </View>
-
-      {/* User Count */}
-      <View style={styles.userCountContainer}>
-        <Text style={styles.userCountText}>
-          {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'} found
-        </Text>
       </View>
 
       {/* User List */}
@@ -335,13 +329,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EEE',
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
-    borderRadius: 10,
+    borderRadius: 24,
     paddingHorizontal: 15,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   searchInput: {
     flex: 1,
@@ -350,6 +350,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
     color: '#333',
     padding: 0,
+  },
+  addUserButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E8F0FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#3088C7',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -377,18 +387,6 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: '#FFF',
   },
-  userCountContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
-  },
-  userCountText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-Regular',
-    color: '#999',
-  },
   listContainer: {
     padding: 20,
     flexGrow: 1,
@@ -413,13 +411,11 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
+    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  avatarText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   userInfo: {
     flex: 1,
@@ -428,51 +424,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Poppins-Bold',
     color: '#333',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   userEmail: {
     fontSize: 14,
     fontFamily: 'Poppins-Regular',
     color: '#666',
-    marginBottom: 6,
   },
-  userDetails: {
+  actionContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  detailItem: {
-    flexDirection: 'row',
+  actionButton: {
+    padding: 8,
+    marginLeft: 8,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 20,
+    width: 38,
+    height: 38,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
-  },
-  detailText: {
-    fontSize: 12,
-    fontFamily: 'Poppins-Regular',
-    color: '#999',
-    marginLeft: 4,
-  },
-  statusContainer: {
-    alignItems: 'flex-end',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 4,
-  },
-  statusText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statsText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
-    color: '#3088C7',
-    marginLeft: 2,
   },
   emptyState: {
     flex: 1,
