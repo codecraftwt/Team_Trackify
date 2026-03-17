@@ -38,6 +38,11 @@ import { isOnline, setupSyncOnReconnect, syncPendingLocations } from '../../serv
 import { geocodeLatLng } from '../../utils/geocoding';
 import { getPhotoUriForDisplay } from '../../utils/photoStorage';
 import FancyAlert from '../FancyAlert';
+import {
+  startBackgroundLocationJob,
+  stopBackgroundLocationJob,
+  isBackgroundJobRunning,
+} from '../../services/BackgroundLocationJob';
 
 const { width } = Dimensions.get('window');
 
@@ -545,6 +550,11 @@ const LocationTrackingScreen = () => {
     trackingRef.current = false;
     await setTrackingPipEnabled(false);
     setIsTracking(false);
+    try {
+      await stopBackgroundLocationJob();
+    } catch {
+      // no-op
+    }
     stopForegroundTimers();
     if (durationTimerRef.current) {
       clearInterval(durationTimerRef.current);
@@ -920,8 +930,20 @@ const LocationTrackingScreen = () => {
         trackingRef.current
       ) {
         await enterTrackingPip();
-        stopForegroundTimers();
+        // When app goes to background, JS timers will pause; start a proper
+        // background task so points keep saving/syncing to backend.
         const sid = sessionIdRef.current;
+        if (sid && !isBackgroundJobRunning()) {
+          try {
+            await startBackgroundLocationJob(sid, 10000);
+          } catch (e) {
+            console.warn(
+              'LocationTrackingScreen: failed to start background job',
+              e?.message || String(e),
+            );
+          }
+        }
+        stopForegroundTimers();
         if (sid) {
           await AsyncStorage.setItem(
             LAST_SESSION_KEY,
@@ -935,11 +957,32 @@ const LocationTrackingScreen = () => {
       }
 
       if (previousState !== 'active' && nextState === 'active' && trackingRef.current) {
+        // Stop background job and resume normal foreground polling/UI refresh.
+        try {
+          await stopBackgroundLocationJob();
+        } catch {
+          // no-op
+        }
         const sid = sessionIdRef.current;
         if (sid) {
+          // 1) Merge any buffered native points into local DB (fast)
           await syncNativeBufferedPointsForSession(sid);
-          await syncPendingLocations().catch(() => undefined);
+          // 2) Render polyline immediately from local DB (no network wait)
           await loadSessionLocations(sid, true);
+          // 3) Sync to server in background, then refresh UI once more
+          void (async () => {
+            try {
+              await syncPendingLocations();
+            } catch {
+              // ignore
+            }
+            try {
+              await syncNativeBufferedPointsForSession(sid);
+              await loadSessionLocations(sid, false);
+            } catch {
+              // ignore
+            }
+          })();
         }
         startForegroundTimers();
       }
@@ -951,6 +994,11 @@ const LocationTrackingScreen = () => {
       stopForegroundTimers();
       if (durationTimerRef.current) {
         clearInterval(durationTimerRef.current);
+      }
+      try {
+        void stopBackgroundLocationJob();
+      } catch {
+        // no-op
       }
       if (trackingRef.current) {
         void setTrackingPipEnabled(false);
