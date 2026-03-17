@@ -3,12 +3,14 @@ import BackgroundService from 'react-native-background-actions';
 import GetLocation from 'react-native-get-location';
 import DeviceInfo from 'react-native-device-info';
 import * as TrackingService from './TrackingService';
-import { isOnline } from './SyncService';
+import { isOnline, syncPendingLocations } from './SyncService';
 import { geocodeLatLng } from '../utils/geocoding';
+import { syncNativeBufferedPointsForSession } from './BgLocationNative';
 
 const LOCATION_POLL_INTERVAL_MS = 10000;
 const BACKGROUND_TASK_NAME = 'BackgroundLocationTracking';
 let isTaskRunning = false;
+const FLUSH_EVERY_N_POINTS = 3;
 
 const CONFIG = {
   MIN_DISTANCE_METERS: 15,
@@ -189,6 +191,7 @@ const backgroundLocationTask = async (taskData) => {
   let locationCount = 0;
   let lastSuccessfulLocation = null;
   let consecutiveFailures = 0;
+  let lastFlushAtCount = 0;
   // Allow more failures before triggering a recovery backoff
   const MAX_CONSECUTIVE_FAILURES = 10;
   
@@ -243,6 +246,25 @@ const backgroundLocationTask = async (taskData) => {
               });
               
               console.log(`Background: Location sent successfully. Total: ${locationCount}`);
+
+              // Periodically flush any offline/native-buffered points to server while background.
+              if (locationCount - lastFlushAtCount >= FLUSH_EVERY_N_POINTS) {
+                lastFlushAtCount = locationCount;
+                try {
+                  const merged = await syncNativeBufferedPointsForSession(sessionId);
+                  if (merged?.inserted > 0) {
+                    console.log(`Background: merged native buffered points: ${merged.inserted}`);
+                  }
+                } catch (e) {
+                  console.warn('Background: native buffer sync failed:', e?.message || String(e));
+                }
+                try {
+                  const syncRes = await syncPendingLocations();
+                  console.log(`Background: pending sync result: ${syncRes?.synced ?? 0}`);
+                } catch (e) {
+                  console.warn('Background: pending sync failed:', e?.message || String(e));
+                }
+              }
             } else {
               consecutiveFailures++;
               console.warn(`Background: Failed to send location. Consecutive failures: ${consecutiveFailures}`);
