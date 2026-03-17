@@ -29,6 +29,7 @@ import LocationTrackingScreen from '../Screens/Tracking/LocationTrackingScreen';
 import TrackingHistoryScreen from '../Screens/Tracking/TrackingHistoryScreen';
 import TrackingSessionDetailScreen from '../Screens/Tracking/TrackingSessionDetailScreen';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
+import ForgotPassword from '../Screens/ForgotPassword';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -184,6 +185,7 @@ const AuthStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="LoginScreen" component={LoginScreen} />
     <Stack.Screen name="OTPScreen" component={OTPScreen} />
+     <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
   </Stack.Navigator>
 );
 

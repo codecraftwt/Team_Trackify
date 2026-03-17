@@ -184,16 +184,11 @@ const LoginScreen = ({ navigation }) => {
       setIsLoading(false);
     }
   };
-
-  // Optional: Add a function to handle forgot password
+  
   const handleForgotPassword = () => {
-    // Navigate to forgot password screen or show modal
-    Alert.alert(
-      "Forgot Password",
-      "Please contact support to reset your password.",
-      [{ text: "OK" }]
-    );
-  };
+  // Navigate to forgot password screen
+  navigation.navigate('ForgotPassword');
+};
 
   return (
     <View style={styles.mainContainer}>
