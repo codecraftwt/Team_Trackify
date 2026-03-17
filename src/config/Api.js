@@ -7,7 +7,8 @@ const Api = axios.create({
     // "https://luckycrm-001-site1.ltempurl.com/",
     // "http://180.179.21.98:8082/",
     // "https://trackingapp-backend-6ny6.onrender.com",
-    'http://10.0.2.2:5000',
+    // 'http://10.0.2.2:5000',
+    'https://trackingapp.instantwebsitedevelopment.com',
 
   headers: {
     "Content-Type": "application/json",
