@@ -189,16 +189,18 @@ const EditProfileScreen = () => {
           </View>
 
           <Text style={styles.label}>Email Address</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="mail-outline" size={20} color="#438AFF" style={styles.inputIcon} />
+          <View style={[styles.inputWrapper, profile.role_id === 0 && styles.disabledInputWrapper]}>
+            <Ionicons name="mail-outline" size={20} color={profile.role_id === 0 ? "#9CA3AF" : "#438AFF"} style={styles.inputIcon} />
             <TextInput
-              style={styles.input}
+              style={[styles.input, profile.role_id === 0 && styles.disabledInput]}
               placeholder="Email Address"
               placeholderTextColor="#9CA3AF"
               keyboardType="email-address"
               autoCapitalize="none"
               value={formData.email}
               onChangeText={(t) => setFormData((p) => ({ ...p, email: t }))}
+              editable={profile.role_id !== 0}
+              selectTextOnFocus={profile.role_id !== 0}
             />
           </View>
 
@@ -411,6 +413,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
+  disabledInputWrapper: {
+    backgroundColor: "#E5E7EB",
+    borderColor: "#D1D5DB",
+  },
   inputIcon: {
     marginRight: wp(3),
   },
@@ -419,6 +425,9 @@ const styles = StyleSheet.create({
     paddingVertical: hp(1.6),
     fontSize: wp(4),
     color: "#111827",
+  },
+  disabledInput: {
+    color: "#6B7280",
   },
   eyeButton: {
     padding: wp(2),
