@@ -217,10 +217,10 @@ const ProfileScreen = ({ navigation }) => {
         <ModalComponent
           isVisible={logoutModalVisible}
           onClose={() => setLogoutModalVisible(false)}
-          iconName="sign-out-alt"
+          // iconName="sign-out-alt"
           iconColor="#E94B3C"
-          title="Do you really want to log out?"
-          content={<Text style={styles.logoutModalText}>Are you sure you want to log out?</Text>}
+          title="Are you sure you want to log out?"
+          // content={<Text style={styles.logoutModalText}>Are you sure you want to log out?</Text>}
           buttonText="Logout"
           onConfirm={confirmLogout}
         />

@@ -17,10 +17,31 @@ import * as TrackingService from '../../services/TrackingService';
 import CustomHeader from '../../Component/CustomHeader';
 import { useAuth } from '../../config/auth-context';
 
+// const formatTime = (iso) => {
+//   if (!iso) return '—';
+//   const d = new Date(iso);
+//   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+// };
 const formatTime = (iso) => {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // If the string doesn't have 'Z' and no timezone offset, assume it's UTC
+  let dateStr = iso;
+  if (iso && !iso.endsWith('Z') && !iso.includes('+')) {
+    dateStr = iso + 'Z'; // Append Z to treat as UTC
+  }
+
+  const d = new Date(dateStr);
+
+  // Check if date is valid
+  if (isNaN(d.getTime())) return '—';
+
+  return d.toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
 };
 
 /** Handles totalDistance in km (new API) or meters (legacy) */
@@ -56,10 +77,10 @@ const getSessionId = (session) =>
   null;
 
 const SessionItem = ({ item, onPress }) => {
-  const start = formatTime(item.startTime);
-  const end = formatTime(item.endTime);
-  const distance = item.totalDistance ?? 0;
   const isActive = !item.endTime;
+  const start = formatTime(item.startTime);
+  const end = isActive ? 'Active' : formatTime(item.endTime);
+  const distance = item.totalDistance ?? 0;
 
   return (
     <View
@@ -130,7 +151,7 @@ const TrackingHistoryScreen = ({ route }) => {
 
   const limit = 20;
   const hasLoadedRef = useRef(false);
-  const loadRef = useRef(() => {});
+  const loadRef = useRef(() => { });
 
   const [page, setPage] = useState(1);
   const [nextCursor, setNextCursor] = useState(null);
@@ -145,14 +166,14 @@ const TrackingHistoryScreen = ({ route }) => {
       });
       return;
     }
-    
+
     setLoadingCalendar(true);
     try {
       // Using the TrackingService function
       console.log('Fetching tracking dates for userId:', targetUserId);
       const dates = await TrackingService.getUserTrackingDates(targetUserId);
       console.log('Dates from API:', dates); // Debug log
-      
+
       const marked = {};
 
       // Get today's date in YYYY-MM-DD format
