@@ -29,6 +29,19 @@ const CONFIG = {
 
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
 
+// BackgroundService.stop() does not interrupt an awaited timer. To make "stop tracking"
+// responsive, sleep in short increments and exit early when stopping.
+const sleepInterruptible = async (totalMs, stepMs = 250) => {
+  const ms = Math.max(0, Number(totalMs) || 0);
+  const step = Math.max(50, Number(stepMs) || 250);
+  const started = Date.now();
+  while (Date.now() - started < ms) {
+    if (!isTaskRunning || !BackgroundService.isRunning()) return;
+    const remaining = ms - (Date.now() - started);
+    await sleep(Math.min(step, remaining));
+  }
+};
+
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371e3;
   const φ1 = lat1 * Math.PI / 180;
@@ -286,7 +299,7 @@ const backgroundLocationTask = async (taskData) => {
                 } catch (notifError) {
                   console.warn('Background: Failed to update notification during backoff:', notifError?.message);
                 }
-                await sleep(backoffMs);
+                await sleepInterruptible(backoffMs);
                 consecutiveFailures = 0;
               }
             }
@@ -308,7 +321,7 @@ const backgroundLocationTask = async (taskData) => {
           }
           
           const backoffMs = Math.min(intervalMs * 6, 10 * 60 * 1000); // up to 10 minutes
-          await sleep(backoffMs);
+          await sleepInterruptible(backoffMs);
           consecutiveFailures = 0;
         }
       }
@@ -319,7 +332,7 @@ const backgroundLocationTask = async (taskData) => {
         adjustedInterval = Math.min(intervalMs * 2, 30000);
       }
       
-      await sleep(adjustedInterval);
+      await sleepInterruptible(adjustedInterval);
     }
   } catch (taskError) {
     console.error('Background task error:', taskError);
