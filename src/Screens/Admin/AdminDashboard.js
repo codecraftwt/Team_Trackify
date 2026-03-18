@@ -16,6 +16,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CustomHeader from '../../Component/CustomHeader';
 import { getUserStats } from '../../config/AdminService';
+import { useIsFocused } from '@react-navigation/native';
 
 const TeamTrackifyDashboard = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -34,10 +35,43 @@ const TeamTrackifyDashboard = ({ navigation }) => {
     inactivePercentage: '0',
     todayActivityRate: '0',
   });
+  const isScreenFocused = useIsFocused();
 
   useEffect(() => {
     fetchUserStats();
   }, []);
+
+    // Add back handler for Android
+  useEffect(() => {
+    if (isScreenFocused) {
+      const backHandler = BackHandler.addEventListener(
+        'hardwareBackPress',
+        handleBackPress
+      );
+
+      return () => backHandler.remove();
+    }
+  }, [isScreenFocused]);
+
+    const handleBackPress = () => {
+      Alert.alert(
+        'Exit App',
+        'Are you sure you want to exit?',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => null,
+            style: 'cancel',
+          },
+          {
+            text: 'Exit',
+            onPress: () => BackHandler.exitApp(),
+          },
+        ],
+        { cancelable: false }
+      );
+      return true; // Prevent default back button behavior
+    };
   
 
   const fetchUserStats = async () => {
@@ -92,6 +126,7 @@ const TeamTrackifyDashboard = ({ navigation }) => {
         });
       } else {
         Alert.alert('Error', result.message || 'Failed to fetch user stats');
+        console.log('Error fetching user stats admin dashboard:', result.message);
       }
     } catch (error) {
       console.error('Error fetching user stats:', error);
@@ -138,24 +173,24 @@ const TeamTrackifyDashboard = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const handleCardPress = (cardType) => {
-    switch (cardType) {
-      case 'activeUsers':
-        navigation.navigate('ActiveUsers');
-        break;
-      case 'inactiveUsers':
-        navigation.navigate('InactiveUsers');
-        break;
-      case 'managePlans':
-        navigation.navigate('ActivePlans');
-        break;
-      case 'liveTracking':
-        navigation.navigate('LiveTracking');
-        break;
-      default:
-        break;
-    }
-  };
+  // const handleCardPress = (cardType) => {
+  //   switch (cardType) {
+  //     case 'activeUsers':
+  //       navigation.navigate('ActiveUsers');
+  //       break;
+  //     case 'inactiveUsers':
+  //       navigation.navigate('InactiveUsers');
+  //       break;
+  //     case 'managePlans':
+  //       navigation.navigate('ActivePlans');
+  //       break;
+  //     case 'liveTracking':
+  //       navigation.navigate('LiveTracking');
+  //       break;
+  //     default:
+  //       break;
+  //   }
+  // };
 
   if (loading) {
     return (
@@ -191,9 +226,7 @@ const TeamTrackifyDashboard = ({ navigation }) => {
           <Text style={styles.welcomeText}>Tracking Overview :</Text>
 
           <View style={styles.statsContainer}>
-            <TouchableOpacity
-              style={styles.statCard}
-              onPress={() => handleCardPress('activeUsers')}>
+            <View style={styles.statCard}>
               <View style={styles.cardHeader}>
                 <View style={styles.iconWrapper}>
                   <Icon name="people" size={24} color="#1976D2" />
@@ -205,11 +238,9 @@ const TeamTrackifyDashboard = ({ navigation }) => {
                 <Text style={styles.actionText}>View Details</Text>
                 <Icon name="arrow-forward" size={16} color="#1976D2" />
               </View>
-            </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity
-              style={styles.statCard}
-              onPress={() => handleCardPress('inactiveUsers')}>
+            <View style={styles.statCard}>
               <View style={styles.cardHeader}>
                 <View style={styles.iconWrapper}>
                   <Icon name="person-remove" size={24} color="#D32F2F" />
@@ -221,7 +252,7 @@ const TeamTrackifyDashboard = ({ navigation }) => {
                 <Text style={styles.actionText}>View Details</Text>
                 <Icon name="arrow-forward" size={16} color="#D32F2F" />
               </View>
-            </TouchableOpacity>
+            </View>
 
             <View style={styles.statCard}>
               <View style={styles.cardHeader}>

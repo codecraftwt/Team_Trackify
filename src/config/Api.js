@@ -8,7 +8,7 @@ const Api = axios.create({
     // "http://180.179.21.98:8082/",
     // "https://trackingapp-backend-6ny6.onrender.com",
     'http://10.0.2.2:5000',
-    // 'https://trackingapp.instantwebsitedevelopment.com',
+  // 'https://trackingapp.instantwebsitedevelopment.com',
 
   headers: {
     "Content-Type": "application/json",
@@ -47,10 +47,10 @@ Api.interceptors.request.use(
     return Promise.reject(error)
   },
 )
- 
+
 export const getRequest = (url, config = {}) => Api.get(url, config)
 export const postRequest = (url, data, config = {}) => Api.post(url, data, config)
 export const putRequest = (url, data, config = {}) => Api.put(url, data, config)
 export const deleteRequest = (url, config = {}) => Api.delete(url, config)
- 
+
 export default Api

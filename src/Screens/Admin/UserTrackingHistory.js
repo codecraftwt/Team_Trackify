@@ -1087,7 +1087,6 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import Icon2 from 'react-native-vector-icons/FontAwesome';
 import { Calendar } from 'react-native-calendars';
 import { getUserSessions, getUserSessionDates } from '../../config/AdminService';
@@ -1271,21 +1270,6 @@ const UserTrackingHistory = ({ navigation, route }) => {
       console.log('✅ Manual refresh complete');
       setIsRefreshing(false);
     });
-  };
-
-  // Format duration from seconds to HH:MM:SS
-  const formatDuration = (seconds) => {
-    if (!seconds) return '0m';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${secs}s`;
-    }
-    return `${secs}s`;
   };
 
   // Format distance in km

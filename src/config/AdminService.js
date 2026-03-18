@@ -550,7 +550,7 @@ export const getUserStats = async (adminId) => {
         message: result.message || 'User stats fetched successfully'
       };
     } else {
-      console.log("User Stats API Error Message =====>", result.message);
+      // console.log("User Stats API Error Message =====>", result.message);
 
       return {
         success: false,
