@@ -102,34 +102,34 @@ const TeamTrackifyDashboard = ({ navigation }) => {
   };
 
   // Add back handler for Android
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener(
-      'hardwareBackPress',
-      handleBackPress
-    );
+  // useEffect(() => {
+  //   const backHandler = BackHandler.addEventListener(
+  //     'hardwareBackPress',
+  //     handleBackPress
+  //   );
 
-    return () => backHandler.remove();
-  }, []);
+  //   return () => backHandler.remove();
+  // }, []);
 
-  const handleBackPress = () => {
-    Alert.alert(
-      'Exit App',
-      'Are you sure you want to exit?',
-      [
-        {
-          text: 'Cancel',
-          onPress: () => null,
-          style: 'cancel',
-        },
-        {
-          text: 'Exit',
-          onPress: () => BackHandler.exitApp(),
-        },
-      ],
-      { cancelable: false }
-    );
-    return true; // Prevent default back button behavior
-  };
+  // const handleBackPress = () => {
+  //   Alert.alert(
+  //     'Exit App',
+  //     'Are you sure you want to exit?',
+  //     [
+  //       {
+  //         text: 'Cancel',
+  //         onPress: () => null,
+  //         style: 'cancel',
+  //       },
+  //       {
+  //         text: 'Exit',
+  //         onPress: () => BackHandler.exitApp(),
+  //       },
+  //     ],
+  //     { cancelable: false }
+  //   );
+  //   return true; // Prevent default back button behavior
+  // };
 
 
   const onRefresh = async () => {
@@ -250,37 +250,7 @@ const TeamTrackifyDashboard = ({ navigation }) => {
                 <Icon name="check-circle" size={16} color="#F57C00" />
               </View>
             </View>
-
-              {/* <View style={styles.statCard}>
-              <View style={styles.cardHeader}>
-                <View style={styles.iconWrapper}>
-                  <Icon name="subscriptions" size={24} color="#7B1FA2" />
-                </View>
-                <Text style={styles.cardTitle}>Active Plans</Text>
-              </View>
-              <Text style={styles.statValue}>{STATIC_DATA.activePlans}</Text>
-              <View style={styles.cardAction}>
-                <Text style={styles.actionText}>Manage Plans</Text>
-                <Icon name="arrow-forward" size={16} color="#7B1FA2" />
-              </View>
-              </View> */}
-
-            {/* <TouchableOpacity
-              style={styles.statCard}
-              onPress={() => handleCardPress('liveTracking')}>
-              <View style={styles.cardHeader}>
-                <View style={styles.iconWrapper}>
-                  <Icon name="my-location" size={24} color="#689F38" />
-                </View>
-                <Text style={styles.cardTitle}>Live Tracking Users</Text>
-              </View>
-              <Text style={styles.statValue}>{userStats.currentlyTracking}</Text>
-              <View style={styles.cardAction}>
-                <Text style={styles.actionText}>View on Map</Text>
-                <Icon name="map" size={16} color="#689F38" />
-              </View>
-            </TouchableOpacity> */}
-          </View>
+       </View>
 
           {/* Recent Activities */}
           <View style={styles.activitiesContainer}>
