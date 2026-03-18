@@ -10,7 +10,14 @@ import { syncNativeBufferedPointsForSession } from './BgLocationNative';
 const LOCATION_POLL_INTERVAL_MS = 10000;
 const BACKGROUND_TASK_NAME = 'BackgroundLocationTracking';
 let isTaskRunning = false;
-const FLUSH_EVERY_N_POINTS = 3;
+// How often to force-sync any buffered / offline points to the server
+// while the dedicated background task is running.
+// Previously this was set to 3, which meant the server could lag behind
+// the device by several points when the app stayed in the background.
+// Setting this to 1 makes background syncing effectively continuous:
+// every successfully recorded point triggers a flush so that
+// admin/server views see new polyline segments almost immediately.
+const FLUSH_EVERY_N_POINTS = 1;
 
 const CONFIG = {
   MIN_DISTANCE_METERS: 15,

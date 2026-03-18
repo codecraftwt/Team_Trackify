@@ -1532,7 +1532,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  BackHandler
+  BackHandler,
+  useColorScheme
 } from 'react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -1721,6 +1722,9 @@ const LocationTrackingScreen = () => {
 
   const autoStartTracking = route?.params?.autoStartTracking === true;
   const autoStopTracking = route?.params?.autoStopTracking === true;
+
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
 
   const showAlert = useCallback((title, message, type = 'error') => {
     setAlertConfig({ title, message, type });
@@ -2773,6 +2777,7 @@ const LocationTrackingScreen = () => {
             <TextInput
               style={styles.input}
               placeholder="Location Name"
+              placeholderTextColor={isDarkMode ? '#A09E9E' : '#999'}
               value={tempRemark}
               onChangeText={setTempRemark}
             />
