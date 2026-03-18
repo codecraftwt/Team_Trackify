@@ -214,14 +214,25 @@ const LocationTrackingScreen = () => {
   }, []);
 
   // Add back handler for Android
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener(
-      'hardwareBackPress',
-      handleBackPress
-    );
+  // useEffect(() => {
+  //   const backHandler = BackHandler.addEventListener(
+  //     'hardwareBackPress',
+  //     handleBackPress
+  //   );
 
-    return () => backHandler.remove();
-  }, []);
+  //   return () => backHandler.remove();
+  // }, []);
+  // Add back handler for Android
+  useEffect(() => {
+    if (isScreenFocused) {
+      const backHandler = BackHandler.addEventListener(
+        'hardwareBackPress',
+        handleBackPress
+      );
+
+      return () => backHandler.remove();
+    }
+  }, [isScreenFocused]);
 
   const handleBackPress = () => {
     Alert.alert(

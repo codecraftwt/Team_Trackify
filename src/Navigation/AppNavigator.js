@@ -30,6 +30,8 @@ import TrackingHistoryScreen from '../Screens/Tracking/TrackingHistoryScreen';
 import TrackingSessionDetailScreen from '../Screens/Tracking/TrackingSessionDetailScreen';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import ForgotPassword from '../Screens/ForgotPassword';
+import ManagePlans from '../Screens/Admin/ManagePlans';
+import PlanDetails from '../Screens/Admin/PlanDetails';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -54,13 +56,13 @@ const commonScreenOptions = ({
   ),
   headerRight: showEdit
     ? () => (
-        <TouchableOpacity
-          onPress={() => navigation.navigate(editScreen)}
-          style={{ marginRight: 15 }}
-        >
-          <Icon name="pencil" size={20} color="#438AFF" />
-        </TouchableOpacity>
-      )
+      <TouchableOpacity
+        onPress={() => navigation.navigate(editScreen)}
+        style={{ marginRight: 15 }}
+      >
+        <Icon name="pencil" size={20} color="#438AFF" />
+      </TouchableOpacity>
+    )
     : undefined,
   headerTitleStyle: {
     fontWeight: '600',
@@ -185,7 +187,7 @@ const AuthStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="LoginScreen" component={LoginScreen} />
     <Stack.Screen name="OTPScreen" component={OTPScreen} />
-     <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
+    <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
   </Stack.Navigator>
 );
 
@@ -292,6 +294,26 @@ const AuthenticatedStack = ({ route }) => {
           commonScreenOptions({ ...props, title: 'Faceregister ' })
         }
       />
+
+      {/* Add ManagePlans screen here */}
+      <Stack.Screen
+        name="ManagePlans"
+        component={ManagePlans}
+        options={props => ({
+          ...commonScreenOptions(props),
+          headerShown: false,
+        })}
+      />
+
+      <Stack.Screen
+        name="PlanDetails"
+        component={PlanDetails}
+        options={props => ({
+          ...commonScreenOptions(props),
+          headerShown: false,
+        })}
+      />
+
       {/* Location Tracking */}
       <Stack.Screen
         name="LocationTracking"

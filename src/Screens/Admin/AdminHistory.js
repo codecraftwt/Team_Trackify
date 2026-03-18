@@ -10,11 +10,16 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Icon2 from 'react-native-vector-icons/Ionicons';
 import { useAuth } from '../../config/auth-context';
-import { getAdminUsers } from '../../config/AdminService'; 
+import { getAdminUsers, updateUser, deleteUser, registerUser } from '../../config/AdminService'; 
 
 const AdminHistory = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,6 +30,36 @@ const AdminHistory = ({ navigation }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
   
+  // Modal states
+  const [addUserModalVisible, setAddUserModalVisible] = useState(false);
+  const [editUserModalVisible, setEditUserModalVisible] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Selected user for editing
+  const [selectedUser, setSelectedUser] = useState(null);
+  
+  // Add user form state
+  const [newUserData, setNewUserData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    mobile_no: '',
+    address: '',
+    role_id: 0, // Default to User
+  });
+  
+  // Edit user form state
+  const [editUserData, setEditUserData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    mobile_no: '',
+    address: '',
+    role_id: 0,
+    isActive: true,
+    status: 1,
+  });
+   
   const { userId } = useAuth();
 
   // Fetch users from API
@@ -70,15 +105,55 @@ const AdminHistory = ({ navigation }) => {
     fetchUsers(true);
   };
 
-  // Handle add user
+  // Handle add user - Open modal
   const handleAddUser = () => {
-    // Navigate to add user screen or show add user modal
-    Alert.alert('Add User', 'Navigate to add user screen', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'OK', onPress: () => console.log('Navigate to add user') }
-    ]);
-    // You can replace with actual navigation:
-    // navigation.navigate('AddUser');
+    setNewUserData({
+      name: '',
+      email: '',
+      password: '',
+      mobile_no: '',
+      address: '',
+      role_id: 0,
+    });
+    setAddUserModalVisible(true);
+  };
+
+  // Handle add user submit
+  const handleAddUserSubmit = async () => {
+    // Validate required fields
+    if (!newUserData.name.trim()) {
+      Alert.alert('Validation Error', 'Please enter user name');
+      return;
+    }
+    if (!newUserData.email.trim()) {
+      Alert.alert('Validation Error', 'Please enter email');
+      return;
+    }
+    if (!newUserData.password.trim()) {
+      Alert.alert('Validation Error', 'Please enter password');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await registerUser({
+        ...newUserData,
+        createdby: userId,
+      });
+
+      if (response.success) {
+        Alert.alert('Success', 'User registered successfully');
+        setAddUserModalVisible(false);
+        fetchUsers(true); // Refresh the list
+      } else {
+        Alert.alert('Error', response.message || 'Failed to register user');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Something went wrong while registering user');
+      console.error('Error registering user:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Filter users based on search and active tab
@@ -105,12 +180,66 @@ const AdminHistory = ({ navigation }) => {
     setFilteredUsers(result);
   }, [searchQuery, activeTab, users]);
 
-  // Handle edit user
+  // Handle edit user - Open edit modal with user data
   const handleEditUser = (user) => {
-    Alert.alert('Edit User', `Edit ${user.name}`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Edit', onPress: () => console.log('Edit user:', user.id) }
-    ]);
+    setSelectedUser(user);
+    setEditUserData({
+      name: user.name || '',
+      email: user.email || '',
+      password: '', // Don't pre-fill password
+      mobile_no: user.mobile_no || '',
+      address: user.address || '',
+      role_id: user.role_id || 0,
+      isActive: user.isActive !== false,
+      status: user.status || 1,
+    });
+    setEditUserModalVisible(true);
+  };
+
+  // Handle edit user submit
+  const handleEditUserSubmit = async () => {
+    // Validate required fields
+    if (!editUserData.name.trim()) {
+      Alert.alert('Validation Error', 'Please enter user name');
+      return;
+    }
+    if (!editUserData.email.trim()) {
+      Alert.alert('Validation Error', 'Please enter email');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const updateData = {
+        name: editUserData.name,
+        email: editUserData.email,
+        mobile_no: editUserData.mobile_no,
+        address: editUserData.address,
+        role_id: editUserData.role_id,
+        isActive: editUserData.isActive,
+        status: editUserData.status,
+      };
+
+      // Only include password if it's provided
+      if (editUserData.password.trim()) {
+        updateData.password = editUserData.password;
+      }
+
+      const response = await updateUser(selectedUser.id, updateData);
+
+      if (response.success) {
+        Alert.alert('Success', 'User updated successfully');
+        setEditUserModalVisible(false);
+        fetchUsers(true); // Refresh the list
+      } else {
+        Alert.alert('Error', response.message || 'Failed to update user');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Something went wrong while updating user');
+      console.error('Error updating user:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Handle delete user
@@ -122,10 +251,22 @@ const AdminHistory = ({ navigation }) => {
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Delete', 
-          onPress: () => {
-            console.log('Delete user:', user.id);
-          },
-          style: 'destructive'
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await deleteUser(user.id);
+              
+              if (response.success) {
+                Alert.alert('Success', 'User deleted successfully');
+                fetchUsers(true); // Refresh the list
+              } else {
+                Alert.alert('Error', response.message || 'Failed to delete user');
+              }
+            } catch (err) {
+              Alert.alert('Error', 'Something went wrong while deleting user');
+              console.error('Error deleting user:', err);
+            }
+          }
         }
       ]
     );
@@ -284,6 +425,352 @@ const AdminHistory = ({ navigation }) => {
           />
         }
       />
+
+      {/* Add User Modal */}
+      <Modal
+        visible={addUserModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setAddUserModalVisible(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add New User</Text>
+              <TouchableOpacity onPress={() => setAddUserModalVisible(false)}>
+                <Icon name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter name"
+                  placeholderTextColor="#999"
+                  value={newUserData.name}
+                  onChangeText={(text) => setNewUserData({...newUserData, name: text})}
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter email"
+                  placeholderTextColor="#999"
+                  value={newUserData.email}
+                  onChangeText={(text) => setNewUserData({...newUserData, email: text})}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Password *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter password"
+                  placeholderTextColor="#999"
+                  value={newUserData.password}
+                  onChangeText={(text) => setNewUserData({...newUserData, password: text})}
+                  secureTextEntry
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Mobile Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter mobile number"
+                  placeholderTextColor="#999"
+                  value={newUserData.mobile_no}
+                  onChangeText={(text) => setNewUserData({...newUserData, mobile_no: text})}
+                  keyboardType="phone-pad"
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Address</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Enter address"
+                  placeholderTextColor="#999"
+                  value={newUserData.address}
+                  onChangeText={(text) => setNewUserData({...newUserData, address: text})}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Role</Text>
+                <View style={styles.roleContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      newUserData.role_id === 0 && styles.roleButtonActive
+                    ]}
+                    onPress={() => setNewUserData({...newUserData, role_id: 0})}
+                  >
+                    <Text style={[
+                      styles.roleButtonText,
+                      newUserData.role_id === 0 && styles.roleButtonTextActive
+                    ]}>
+                      User
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      newUserData.role_id === 1 && styles.roleButtonActive
+                    ]}
+                    onPress={() => setNewUserData({...newUserData, role_id: 1})}
+                  >
+                    <Text style={[
+                      styles.roleButtonText,
+                      newUserData.role_id === 1 && styles.roleButtonTextActive
+                    ]}>
+                      Admin
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+            
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setAddUserModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+                onPress={handleAddUserSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Add User</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit User Modal */}
+      <Modal
+        visible={editUserModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setEditUserModalVisible(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit User</Text>
+              <TouchableOpacity onPress={() => setEditUserModalVisible(false)}>
+                <Icon name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.modalContent}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter name"
+                  placeholderTextColor="#999"
+                  value={editUserData.name}
+                  onChangeText={(text) => setEditUserData({...editUserData, name: text})}
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter email"
+                  placeholderTextColor="#999"
+                  value={editUserData.email}
+                  onChangeText={(text) => setEditUserData({...editUserData, email: text})}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>New Password (leave blank to keep current)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter new password"
+                  placeholderTextColor="#999"
+                  value={editUserData.password}
+                  onChangeText={(text) => setEditUserData({...editUserData, password: text})}
+                  secureTextEntry
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Mobile Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter mobile number"
+                  placeholderTextColor="#999"
+                  value={editUserData.mobile_no}
+                  onChangeText={(text) => setEditUserData({...editUserData, mobile_no: text})}
+                  keyboardType="phone-pad"
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Address</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Enter address"
+                  placeholderTextColor="#999"
+                  value={editUserData.address}
+                  onChangeText={(text) => setEditUserData({...editUserData, address: text})}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Role</Text>
+                <View style={styles.roleContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      editUserData.role_id === 0 && styles.roleButtonActive
+                    ]}
+                    onPress={() => setEditUserData({...editUserData, role_id: 0})}
+                  >
+                    <Text style={[
+                      styles.roleButtonText,
+                      editUserData.role_id === 0 && styles.roleButtonTextActive
+                    ]}>
+                      User
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      editUserData.role_id === 1 && styles.roleButtonActive
+                    ]}
+                    onPress={() => setEditUserData({...editUserData, role_id: 1})}
+                  >
+                    <Text style={[
+                      styles.roleButtonText,
+                      editUserData.role_id === 1 && styles.roleButtonTextActive
+                    ]}>
+                      Admin
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Status</Text>
+                <View style={styles.roleContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      editUserData.status === 1 && styles.roleButtonActive
+                    ]}
+                    onPress={() => setEditUserData({...editUserData, status: 1})}
+                  >
+                    <Text style={[
+                      styles.roleButtonText,
+                      editUserData.status === 1 && styles.roleButtonTextActive
+                    ]}>
+                      Check-in
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      editUserData.status === 0 && styles.roleButtonActive
+                    ]}
+                    onPress={() => setEditUserData({...editUserData, status: 0})}
+                  >
+                    <Text style={[
+                      styles.roleButtonText,
+                      editUserData.status === 0 && styles.roleButtonTextActive
+                    ]}>
+                      Check-out
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Active Status</Text>
+                <View style={styles.roleContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      editUserData.isActive === true && styles.roleButtonActive
+                    ]}
+                    onPress={() => setEditUserData({...editUserData, isActive: true})}
+                  >
+                    <Text style={[
+                      styles.roleButtonText,
+                      editUserData.isActive === true && styles.roleButtonTextActive
+                    ]}>
+                      Active
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      editUserData.isActive === false && styles.roleButtonActive
+                    ]}
+                    onPress={() => setEditUserData({...editUserData, isActive: false})}
+                  >
+                    <Text style={[
+                      styles.roleButtonText,
+                      editUserData.isActive === false && styles.roleButtonTextActive
+                    ]}>
+                      Inactive
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+            
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setEditUserModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+                onPress={handleEditUserSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Update User</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -470,6 +957,124 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontFamily: 'Poppins-Medium',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+  },
+  modalContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    maxHeight: 400,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderTopWidth: 1,
+    borderTopColor: '#EEE',
+  },
+  inputGroup: {
+    marginBottom: 15,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: '#333',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontFamily: 'Poppins-Regular',
+    color: '#333',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  textArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  roleContainer: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  roleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    alignItems: 'center',
+  },
+  roleButtonActive: {
+    backgroundColor: '#3088C7',
+    borderColor: '#3088C7',
+  },
+  roleButtonText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    color: '#666',
+  },
+  roleButtonTextActive: {
+    color: '#FFF',
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+    color: '#666',
+  },
+  submitButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#3088C7',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#A0C4E8',
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+    color: '#FFF',
   },
 });
 
