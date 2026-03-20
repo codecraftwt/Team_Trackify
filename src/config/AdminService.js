@@ -633,6 +633,9 @@ export const updateUser = async (userId, userData) => {
     
     // Append avatar if provided
     if (userData.avtar) {
+      // Backend multer field name might be `avatar` or `avtar` (typo).
+      // Append both so req.file is populated regardless.
+      formData.append('avatar', userData.avtar);
       formData.append('avtar', userData.avtar);
     }
 
@@ -778,7 +781,19 @@ export const deleteUser = async (userId) => {
  */
 export const registerUser = async (userData) => {
   try {
-    console.log("Registering new user with data =====>", userData);
+    const avatarMeta = userData?.avtar
+      ? {
+          uri: userData.avtar.uri,
+          type: userData.avtar.type || 'image/jpeg',
+          fileName: userData.avtar.fileName || userData.avtar.name,
+        }
+      : null;
+
+    console.log("Registering new user with data =====>", {
+      ...userData,
+      password: userData?.password ? '***MASKED***' : undefined,
+      avtar: avatarMeta,
+    });
 
     // Create FormData for multipart/form-data
     const formData = new FormData();
@@ -788,6 +803,10 @@ export const registerUser = async (userData) => {
     formData.append('email', userData.email);
     formData.append('password', userData.password);
     formData.append('role_id', String(userData.role_id));
+
+    // NOTE: Logging full FormData can be noisy / non-serializable in RN.
+    console.log("RegisterUser FormData avatar meta =====>", avatarMeta);
+    
 
     // Append optional fields
     if (userData.mobile_no) formData.append('mobile_no', userData.mobile_no);
@@ -799,7 +818,7 @@ export const registerUser = async (userData) => {
       formData.append('avtar', userData.avtar);
     }
 
-    const response = await fetch(`${BASE_URL}/register`, {
+    const response = await fetch(`${BASE_URL}/api/users/register`, {
       method: 'POST',
       body: formData,
     });
@@ -1040,6 +1059,79 @@ export const getLastFiveTrackedUsers = async (adminId) => {
       success: false,
       data: null,
       message: error.message || 'Something went wrong'
+    };
+  }
+};
+
+/**
+ * Get current locations of all active users under an admin
+ * @param {string} adminId - The admin ID
+ * @returns {Promise<{success: boolean, data: any, message: string}>}
+ */
+export const getActiveUsersCurrentLocations = async adminId => {
+  try {
+    // console.log("Admin ID for current locations =====>", adminId);
+
+    // Get token
+    const token = await AsyncStorage.getItem('authToken');
+
+    if (!token) {
+      return {
+        success: false,
+        data: null,
+        message: 'Authentication token not found',
+      };
+    }
+
+    const cleanToken = token.replace(/['"]+/g, '');
+
+    const response = await fetch(
+      `${BASE_URL}/api/Tracking/admin/${adminId}/users/current-locations`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: cleanToken.startsWith('Bearer ')
+            ? cleanToken
+            : `Bearer ${cleanToken}`,
+        },
+      },
+    ); // console.log("Current Locations API Status =====>", response.status);
+
+    const text = await response.text(); // console.log("Current Locations Raw Response =====>", text);
+    if (!text) {
+      return {
+        success: false,
+        data: null,
+        message: 'Empty response from server',
+      };
+    }
+
+    const result = JSON.parse(text); // console.log("Parsed Current Locations =====>", result);
+    if (response.ok && result.success) {
+      return {
+        success: true,
+        data: result.data,
+        message:
+          result.message || 'Active users locations fetched successfully',
+      };
+    } else {
+      return {
+        success: false,
+        data: null,
+        message: result.message || 'Failed to fetch active user locations',
+      };
+    }
+  } catch (error) {
+    console.error(
+      'AdminService Error fetching current locations =====>',
+      error,
+    );
+
+    return {
+      success: false,
+      data: null,
+      message: error.message || 'Something went wrong',
     };
   }
 };

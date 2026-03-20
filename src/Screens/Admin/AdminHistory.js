@@ -19,6 +19,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Icon2 from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'react-native-image-picker'; // Add this import
 import { useAuth } from '../../config/auth-context';
 import { getAdminUsers, updateUser, deleteUser, registerUser } from '../../config/AdminService';
 import { isSubscriptionExpired, getSubscriptionMessage } from '../../utils/subscriptionUtils';
@@ -54,6 +55,8 @@ const AdminHistory = ({ navigation, route }) => {
     mobile_no: '',
     address: '',
     role_id: 0, // Default to User
+    avatar: null, // Add avatar field
+    avatarUri: null, // For preview
   });
 
   // Check if subscription is expired
@@ -111,6 +114,46 @@ const AdminHistory = ({ navigation, route }) => {
   });
    
   const { userId } = useAuth();
+
+  // Function to pick image from gallery or camera
+  const pickImage = (type = 'gallery') => {
+    const options = {
+      mediaType: 'photo',
+      quality: 0.8,
+      includeBase64: false,
+      maxWidth: 800,
+      maxHeight: 800,
+    };
+
+    const imagePickerMethod = type === 'camera' 
+      ? ImagePicker.launchCamera 
+      : ImagePicker.launchImageLibrary;
+
+    imagePickerMethod(options, (response) => {
+      if (response.didCancel) {
+        console.log('User cancelled image picker');
+      } else if (response.error) {
+        console.log('ImagePicker Error: ', response.error);
+        Alert.alert('Error', 'Failed to pick image');
+      } else if (response.assets && response.assets[0]) {
+        const source = { uri: response.assets[0].uri };
+        setNewUserData({
+          ...newUserData,
+          avatar: response.assets[0],
+          avatarUri: source.uri,
+        });
+      }
+    });
+  };
+
+  // Function to remove selected image
+  const removeImage = () => {
+    setNewUserData({
+      ...newUserData,
+      avatar: null,
+      avatarUri: null,
+    });
+  };
 
   // Fetch users from API
   const fetchUsers = useCallback(async (showLoading = true) => {
@@ -179,11 +222,13 @@ const AdminHistory = ({ navigation, route }) => {
       mobile_no: '',
       address: '',
       role_id: 0,
+      avatar: null,
+      avatarUri: null,
     });
     setAddUserModalVisible(true);
   };
 
-  // Handle add user submit
+  // Handle add user submit with avatar
   const handleAddUserSubmit = async () => {
     // Validate required fields
     if (!newUserData.name.trim()) {
@@ -201,17 +246,56 @@ const AdminHistory = ({ navigation, route }) => {
 
     setIsSubmitting(true);
     try {
-      const response = await registerUser({
-        ...newUserData,
+      // Register endpoint expects `avtar` for the profile image file
+      const avtarFile = newUserData.avatar
+        ? {
+            uri: newUserData.avatar.uri,
+            type: newUserData.avatar.type || 'image/jpeg',
+            name:
+              newUserData.avatar.fileName || `avatar_${Date.now()}.jpg`,
+          }
+        : null;
+
+      const payload = {
+        name: newUserData.name,
+        email: newUserData.email,
+        password: newUserData.password,
+        mobile_no: newUserData.mobile_no,
+        address: newUserData.address,
+        role_id: newUserData.role_id,
         createdby: userId,
+        avtar: avtarFile,
+      };
+
+      console.log('AddUser payload =====>', {
+        ...payload,
+        avtar: payload.avtar
+          ? {
+              uri: payload.avtar.uri,
+              type: payload.avtar.type || 'image/jpeg',
+              fileName: payload.avtar.name,
+            }
+          : null,
       });
+
+      const response = await registerUser(payload);
 
       if (response.success) {
         Alert.alert('Success', 'User registered successfully');
         setAddUserModalVisible(false);
         fetchUsers(true); // Refresh the list
       } else {
-        Alert.alert('Error', response.message || 'Failed to register user');
+        // Backend may create the user record first, then fail (e.g., email/OTP timeout).
+        // Refresh anyway so the UI matches DB state.
+        if (response?.message?.toLowerCase().includes('timeout')) {
+          fetchUsers(true);
+          Alert.alert(
+            'Request timed out',
+            `${response.message || 'Connection timeout'}. The user may have been created. Please refresh to confirm.`,
+          );
+        } else {
+          Alert.alert('Error', response.message || 'Failed to register user');
+        }
       }
     } catch (err) {
       Alert.alert('Error', 'Something went wrong while registering user');
@@ -381,9 +465,13 @@ const AdminHistory = ({ navigation, route }) => {
       activeOpacity={0.7}
     >
       <View style={styles.avatarContainer}>
-        <View style={styles.avatarPlaceholder}>
-          <Icon2 name="person" size={30} color="#666" />
-        </View>
+        {item.avtar ? (
+          <Image source={{ uri: item.avtar }} style={styles.avatarImage} />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Icon2 name="person" size={30} color="#666" />
+          </View>
+        )}
       </View>
       
       <View style={styles.userInfo}>
@@ -541,6 +629,38 @@ const AdminHistory = ({ navigation, route }) => {
             </View>
             
             <ScrollView style={styles.modalContent}>
+              {/* Avatar Upload Section */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Avatar (Optional)</Text>
+                <View style={styles.avatarUploadContainer}>
+                  {newUserData.avatarUri ? (
+                    <View style={styles.avatarPreviewContainer}>
+                      <Image source={{ uri: newUserData.avatarUri }} style={styles.avatarPreview} />
+                      <TouchableOpacity style={styles.removeAvatarButton} onPress={removeImage}>
+                        <Icon name="close" size={20} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.avatarUploadButtons}>
+                      <TouchableOpacity 
+                        style={styles.uploadButton}
+                        onPress={() => pickImage('gallery')}
+                      >
+                        <Icon2 name="images-outline" size={24} color="#3088C7" />
+                        <Text style={styles.uploadButtonText}>Gallery</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.uploadButton}
+                        onPress={() => pickImage('camera')}
+                      >
+                        <Icon2 name="camera-outline" size={24} color="#3088C7" />
+                        <Text style={styles.uploadButtonText}>Camera</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </View>
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Name *</Text>
                 <TextInput
@@ -602,7 +722,7 @@ const AdminHistory = ({ navigation, route }) => {
                 />
               </View>
               
-              <View style={styles.inputGroup}>
+              {/* <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Role</Text>
                 <View style={styles.roleContainer}>
                   <TouchableOpacity
@@ -634,7 +754,7 @@ const AdminHistory = ({ navigation, route }) => {
                     </Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </View> */}
             </ScrollView>
             
             <View style={styles.modalFooter}>
@@ -741,7 +861,7 @@ const AdminHistory = ({ navigation, route }) => {
                 />
               </View>
               
-              <View style={styles.inputGroup}>
+              {/* <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Role</Text>
                 <View style={styles.roleContainer}>
                   <TouchableOpacity
@@ -807,7 +927,7 @@ const AdminHistory = ({ navigation, route }) => {
                     </Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </View> */}
               
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Active Status</Text>
@@ -1170,6 +1290,67 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Poppins-Medium',
     color: '#FFF',
+  },
+  avatarUploadContainer: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 15,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderStyle: 'dashed',
+  },
+  avatarUploadButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+  },
+  uploadButton: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3088C7',
+    minWidth: 100,
+  },
+  uploadButtonText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+    color: '#3088C7',
+    marginTop: 4,
+  },
+  avatarPreviewContainer: {
+    position: 'relative',
+    alignItems: 'center',
+  },
+  avatarPreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: '#3088C7',
+  },
+  removeAvatarButton: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#F44336',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  avatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
 });
 
