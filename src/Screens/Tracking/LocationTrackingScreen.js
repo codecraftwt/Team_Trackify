@@ -208,20 +208,15 @@ const LocationTrackingScreen = () => {
   const autoStartTracking = route?.params?.autoStartTracking === true;
   const autoStopTracking = route?.params?.autoStopTracking === true;
 
+  // color scheme
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
+
   const showAlert = useCallback((title, message, type = 'error') => {
     setAlertConfig({ title, message, type });
     setAlertVisible(true);
   }, []);
 
-  // Add back handler for Android
-  // useEffect(() => {
-  //   const backHandler = BackHandler.addEventListener(
-  //     'hardwareBackPress',
-  //     handleBackPress
-  //   );
-
-  //   return () => backHandler.remove();
-  // }, []);
   // Add back handler for Android
   useEffect(() => {
     if (isScreenFocused) {
@@ -1369,6 +1364,7 @@ const LocationTrackingScreen = () => {
             <TextInput
               style={styles.input}
               placeholder="Location Name"
+              placeholderTextColor={isDarkMode ? '#A09E9E' : '#999'}
               value={tempRemark}
               onChangeText={setTempRemark}
             />

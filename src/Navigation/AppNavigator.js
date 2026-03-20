@@ -32,6 +32,7 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import ForgotPassword from '../Screens/ForgotPassword';
 import ManagePlans from '../Screens/Admin/ManagePlans';
 import PlanDetails from '../Screens/Admin/PlanDetails';
+import OngoingUsers from '../Screens/Admin/OngoingUsers';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -333,6 +334,12 @@ const AuthenticatedStack = ({ route }) => {
       <Stack.Screen
         name="TrackingSessionDetail"
         component={TrackingSessionDetailScreen}
+        options={{ headerShown: false }}
+      />
+
+       <Stack.Screen
+        name="OngoingUsers"
+        component={OngoingUsers}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
