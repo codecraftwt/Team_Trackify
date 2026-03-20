@@ -54,6 +54,38 @@ const normalizeTimestamp = (value) => {
   return Date.now();
 };
 
+const parseFiniteNumber = (value) => {
+  if (value == null) return null;
+  const n = typeof value === 'string' ? Number(value) : value;
+  return Number.isFinite(n) ? n : null;
+};
+
+const isValidLatitude = (lat) => lat != null && lat >= -90 && lat <= 90;
+const isValidLongitude = (lng) => lng != null && lng >= -180 && lng <= 180;
+
+// Some APIs may return coordinates with different keys or occasionally swapped.
+// This normalizes a location object into { latitude, longitude } or returns null.
+const extractLatLngFromLocation = (loc) => {
+  const latRaw = loc?.latitude ?? loc?.lat;
+  const lngRaw = loc?.longitude ?? loc?.lng;
+
+  let lat = parseFiniteNumber(latRaw);
+  let lng = parseFiniteNumber(lngRaw);
+
+  if (isValidLatitude(lat) && isValidLongitude(lng)) {
+    return { latitude: lat, longitude: lng };
+  }
+
+  // Fallback: try swapped (lng -> latitude, lat -> longitude)
+  const swappedLat = parseFiniteNumber(lngRaw);
+  const swappedLng = parseFiniteNumber(latRaw);
+  if (isValidLatitude(swappedLat) && isValidLongitude(swappedLng)) {
+    return { latitude: swappedLat, longitude: swappedLng };
+  }
+
+  return null;
+};
+
 const MAX_TELEPORT_DISTANCE_METERS = 500;
 const MAX_REALISTIC_SPEED_MPS = 70;
 
@@ -195,9 +227,14 @@ const SessionDetailsMap = () => {
   const locations = sessionData?.locations ?? [];
 
   // Normalise & sort locations
-  const locationsWithCoords = locations.filter(
-    (l) => l?.latitude != null && l?.longitude != null
-  );
+  const locationsWithCoords = locations
+    .map((l) => {
+      const coords = extractLatLngFromLocation(l);
+      if (!coords) return null;
+      return { ...l, latitude: coords.latitude, longitude: coords.longitude };
+    })
+    .filter(Boolean);
+
   const sortedLocationsWithCoords = [...locationsWithCoords].sort((a, b) => {
     const ta = normalizeTimestamp(a.timestamp ?? a.time ?? a.createdAt);
     const tb = normalizeTimestamp(b.timestamp ?? b.time ?? b.createdAt);
@@ -236,33 +273,34 @@ const SessionDetailsMap = () => {
     [sortedLocationsWithCoords]
   );
 
-  const photoLocations = locations.filter(
-    (l) =>
-      (l?.photoUrl ?? l?.photo ?? l?.photoPath ?? l?.photoUri) &&
-      l?.latitude != null &&
-      l?.longitude != null
+  // The segmentation logic may drop the final segment if it ends up with
+  // only 1 point (React Native Maps Polyline needs >= 2 points).
+  // To make the "End" marker match the visible end of the polyline,
+  // compute the last coordinate that actually exists in rendered segments.
+  const renderedEndCoordinate = useMemo(() => {
+    if (!polylineSegments || polylineSegments.length === 0) return endCoordinate;
+
+    for (let i = polylineSegments.length - 1; i >= 0; i--) {
+      const coords = polylineSegments[i]?.coordinates;
+      if (!coords || coords.length === 0) continue;
+      const last = coords[coords.length - 1];
+      if (
+        last &&
+        Number.isFinite(last.latitude) &&
+        Number.isFinite(last.longitude)
+      ) {
+        return last;
+      }
+    }
+    return endCoordinate;
+  }, [polylineSegments, endCoordinate]);
+
+  const photoLocations = sortedLocationsWithCoords.filter(
+    (l) => (l?.photoUrl ?? l?.photo ?? l?.photoPath ?? l?.photoUri)
   );
 
   const renderRouteMarkers = (keyPrefix) => (
     <>
-      {startCoordinate && (
-        <Marker
-          key={`${keyPrefix}-start`}
-          coordinate={startCoordinate}
-          pinColor="green"
-          title="Start"
-          zIndex={1000}
-        />
-      )}
-      {endCoordinate && (
-        <Marker
-          key={`${keyPrefix}-end`}
-          coordinate={endCoordinate}
-          pinColor="#FF8C00"
-          title="End"
-          zIndex={1001}
-        />
-      )}
       {photoLocations.map((loc, idx) => (
         <Marker
           key={loc.id ?? `${keyPrefix}-photo-${idx}`}
@@ -275,12 +313,33 @@ const SessionDetailsMap = () => {
           description={
             loc.remark != null ? String(loc.remark).trim() || undefined : undefined
           }
+          // Ensure photo markers don't cover start/end markers.
+          zIndex={200}
         />
       ))}
+
+      {startCoordinate && (
+        <Marker
+          key={`${keyPrefix}-start`}
+          coordinate={startCoordinate}
+          pinColor="green"
+          title="Start"
+          zIndex={1000}
+        />
+      )}
+      {renderedEndCoordinate && (
+        <Marker
+          key={`${keyPrefix}-end`}
+          coordinate={renderedEndCoordinate}
+          pinColor="#FF8C00"
+          title="End"
+          zIndex={1001}
+        />
+      )}
     </>
   );
 
-  const locationsWithPhotoOrRemark = locations.filter(
+  const locationsWithPhotoOrRemark = sortedLocationsWithCoords.filter(
     (l) =>
       (l?.photoUrl ?? l?.photo ?? l?.photoPath ?? l?.photoUri) ||
       (l?.remark != null && String(l.remark).trim() !== '') ||
@@ -312,19 +371,15 @@ const SessionDetailsMap = () => {
 
   useEffect(() => {
     if (!sessionData || coordinates.length < 2 || !mapRef.current) return;
-    
-    const timer = setTimeout(() => {
-      try {
-        mapRef.current?.fitToCoordinates(coordinates, {
-          edgePadding: { top: 48, right: 48, bottom: 48, left: 48 },
-          animated: true,
-        });
-      } catch (e) {
-        console.warn('Failed to fit map to coordinates:', e);
-      }
-    }, 300);
-    
-    return () => clearTimeout(timer);
+
+    try {
+      mapRef.current?.fitToCoordinates(coordinates, {
+        edgePadding: { top: 48, right: 48, bottom: 48, left: 48 },
+        animated: true,
+      });
+    } catch (e) {
+      console.warn('Failed to fit map to coordinates:', e);
+    }
   }, [sessionData?.id, coordinates.length]);
 
   if (!userId || !sessionId) {
