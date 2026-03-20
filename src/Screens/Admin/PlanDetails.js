@@ -11,7 +11,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { getPlanById, createOrder, verifyPayment, RAZORPAY_KEY } from '../../services/PlansService';
+import { 
+  getPlanById, 
+  createOrder, 
+  verifyPayment, 
+  RAZORPAY_KEY,
+  getUserSubscriptionStatus,
+  isAddOnPlan,
+  getPurchaseEligibility
+} from '../../services/PlansService';
 import RazorpayCheckout from 'react-native-razorpay';
 // Dynamic import for Razorpay to handle potential loading issues
 // let RazorpayCheckout;
@@ -31,9 +39,24 @@ export default function PlanDetails({ route, navigation }) {
   const [error, setError] = useState(null);
   const [purchasing, setPurchasing] = useState(false);
   const [razorpayReady, setRazorpayReady] = useState(false);
+  
+  // Subscription status state
+  const [subscriptionStatus, setSubscriptionStatus] = useState({
+    hasActivePlan: false,
+    hasExpiredPlan: false,
+    hasNoPlan: true,
+    currentPaymentId: null,
+  });
+  const [loadingSubscription, setLoadingSubscription] = useState(true);
+  
+  // Check if buy button should be disabled
+  const isAddOn = plan ? isAddOnPlan(plan.name) : false;
+  const eligibility = getPurchaseEligibility(subscriptionStatus, plan?.name || '');
+  const isBuyDisabled = !eligibility.canBuy || purchasing || !razorpayReady;
 
   useEffect(() => {
     fetchPlanDetails();
+    fetchSubscriptionStatus();
     
     // Verify Razorpay is available after component mounts
     const timer = setTimeout(() => {
@@ -50,6 +73,27 @@ export default function PlanDetails({ route, navigation }) {
     
     return () => clearTimeout(timer);
   }, []);
+
+  // Fetch subscription status
+  const fetchSubscriptionStatus = async () => {
+    try {
+      setLoadingSubscription(true);
+      const status = await getUserSubscriptionStatus();
+      console.log('Subscription status fetched:', status);
+      setSubscriptionStatus(status);
+    } catch (error) {
+      console.error('Error fetching subscription status:', error);
+      // Set default status on error (allow purchase)
+      setSubscriptionStatus({
+        hasActivePlan: false,
+        hasExpiredPlan: false,
+        hasNoPlan: true,
+        currentPaymentId: null,
+      });
+    } finally {
+      setLoadingSubscription(false);
+    }
+  };
 
   // Handle Buy Plan payment
   const handleBuyPlan = async () => {
@@ -185,7 +229,7 @@ export default function PlanDetails({ route, navigation }) {
     });
   };
 
-  if (loading) {
+  if (loading || loadingSubscription) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
@@ -199,7 +243,7 @@ export default function PlanDetails({ route, navigation }) {
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
-          <Text style={styles.loadingText}>Loading plan details...</Text>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
@@ -269,8 +313,13 @@ export default function PlanDetails({ route, navigation }) {
 
         {/* Plan Name Card */}
         <View style={styles.nameCard}>
-          <Icon name="star" size={30} color="#4A90E2" />
+          <Icon name={isAddOn ? "add-circle" : "star"} size={30} color={isAddOn ? "#F57C00" : "#4A90E2"} />
           <Text style={styles.planName}>{plan.name}</Text>
+          {isAddOn && (
+            <View style={styles.addOnBadge}>
+              <Text style={styles.addOnBadgeText}>ADD-ON</Text>
+            </View>
+          )}
         </View>
 
         {/* Description Card */}
@@ -352,9 +401,9 @@ export default function PlanDetails({ route, navigation }) {
 
         {/* Buy Plan Button */}
         <TouchableOpacity
-          style={[styles.buyButton, (purchasing || !razorpayReady) && styles.buyButtonDisabled]}
+          style={[styles.buyButton, isBuyDisabled && styles.buyButtonDisabled]}
           onPress={handleBuyPlan}
-          disabled={purchasing || !razorpayReady}
+          disabled={isBuyDisabled}
           activeOpacity={0.8}
         >
           {purchasing ? (
@@ -364,13 +413,52 @@ export default function PlanDetails({ route, navigation }) {
               <Icon name="error-outline" size={22} color="#fff" />
               <Text style={styles.buyButtonText}>Payment Unavailable</Text>
             </>
+          ) : !eligibility.canBuy ? (
+            <>
+              <Icon name="lock" size={22} color="#fff" />
+              <Text style={styles.buyButtonText}>
+                {eligibility.disableReason || 'Cannot Purchase'}
+              </Text>
+            </>
           ) : (
             <>
               <Icon name="shopping-cart" size={22} color="#fff" />
-              <Text style={styles.buyButtonText}>Buy Plan</Text>
+              <Text style={styles.buyButtonText}>
+                {isAddOn ? 'Buy Add-on' : 'Buy Plan'}
+              </Text>
             </>
           )}
         </TouchableOpacity>
+        
+        {/* Subscription Status Info */}
+        {loadingSubscription ? null : (
+          <View style={styles.subscriptionInfoContainer}>
+            {subscriptionStatus.hasActivePlan && (
+              <View style={styles.subscriptionInfo}>
+                <Icon name="check-circle" size={16} color="#27AE60" />
+                <Text style={styles.subscriptionInfoText}>
+                  You have an active plan. You can purchase add-ons.
+                </Text>
+              </View>
+            )}
+            {subscriptionStatus.hasExpiredPlan && (
+              <View style={styles.subscriptionInfo}>
+                <Icon name="warning" size={16} color="#F57C00" />
+                <Text style={styles.subscriptionInfoText}>
+                  Your plan has expired. Please renew to continue.
+                </Text>
+              </View>
+            )}
+            {subscriptionStatus.hasNoPlan && isAddOn && (
+              <View style={styles.subscriptionInfo}>
+                <Icon name="info" size={16} color="#1976D2" />
+                <Text style={styles.subscriptionInfoText}>
+                  You need a base plan before purchasing add-ons.
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -490,6 +578,19 @@ headerTitle: {
     color: '#333',
     marginTop: 10,
     textAlign: 'center',
+  },
+  addOnBadge: {
+    backgroundColor: '#F57C00',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  addOnBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Poppins-Bold',
+    letterSpacing: 0.5,
   },
   sectionCard: {
     backgroundColor: '#fff',
@@ -629,5 +730,25 @@ headerTitle: {
     fontSize: 18,
     fontFamily: 'Poppins-SemiBold',
     marginLeft: 10,
+  },
+  // Subscription info styles
+  subscriptionInfoContainer: {
+    marginTop: 10,
+    paddingHorizontal: 10,
+  },
+  subscriptionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  subscriptionInfoText: {
+    marginLeft: 8,
+    fontSize: 13,
+    color: '#666',
+    fontFamily: 'Rubik-Regular',
+    flex: 1,
   },
 });

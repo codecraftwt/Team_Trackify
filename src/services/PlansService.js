@@ -277,3 +277,123 @@ export const verifyAddonPayment = async (razorpayOrderId, razorpayPaymentId, raz
     }
   }
 };
+
+/**
+ * Get user subscription status
+ * Returns information about the user's current plan and whether it's active/expired
+ * @returns {Promise<object>} - Subscription status object
+ */
+export const getUserSubscriptionStatus = async () => {
+  try {
+    const adminId = await getAdminId();
+    
+    if (!adminId) {
+      throw new Error('Admin ID not found. Please login again.');
+    }
+    
+    // Get auth token
+    let token = await AsyncStorage.getItem('token');
+    if (!token) {
+      token = await AsyncStorage.getItem('authToken');
+    }
+    
+    const response = await Api.get(`/api/users/user/${adminId}`, {
+      headers: token ? { 
+        Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` 
+      } : {}
+    });
+    
+    console.log('User subscription status response:', response.data);
+    
+    // Parse the response to extract subscription info
+    const userData = response.data.user;
+    const planExpired = response.data.planExpired;
+    
+    // Check if user has a current payment
+    const hasCurrentPayment = userData && userData.currentPaymentId && userData.currentPaymentId !== null;
+    const currentPayment = userData?.currentPaymentId;
+    
+    // Determine subscription status
+    const subscriptionStatus = {
+      hasActivePlan: hasCurrentPayment && currentPayment?.isActive === true && planExpired === false,
+      hasExpiredPlan: hasCurrentPayment && planExpired === true,
+      hasNoPlan: !hasCurrentPayment,
+      currentPaymentId: currentPayment?._id || null,
+      currentPayment: currentPayment || null,
+      planExpired: planExpired,
+    };
+    
+    console.log('Subscription status:', subscriptionStatus);
+    
+    return subscriptionStatus;
+  } catch (error) {
+    console.error('Error fetching subscription status:', error);
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Failed to fetch subscription status');
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection.');
+    } else {
+      throw new Error('Something went wrong. Please try again.');
+    }
+  }
+};
+
+/**
+ * Check if a plan is an Add-on plan
+ * @param {string} planName - The name of the plan
+ * @returns {boolean} - True if it's an Add-on plan
+ */
+export const isAddOnPlan = (planName) => {
+  return planName && planName.toLowerCase().includes('add on');
+};
+
+/**
+ * Check if a plan is a Regular/Base plan
+ * @param {string} planName - The name of the plan
+ * @returns {boolean} - True if it's a Regular plan
+ */
+export const isRegularPlan = (planName) => {
+  if (!planName) return false;
+  const planNameLower = planName.toLowerCase();
+  return !planNameLower.includes('add on');
+};
+
+/**
+ * Determine if a user can purchase a specific type of plan
+ * @param {object} subscriptionStatus - User's current subscription status
+ * @param {string} planName - The plan name to check
+ * @returns {object} - Object with canBuyRegular and canBuyAddon flags
+ */
+export const getPurchaseEligibility = (subscriptionStatus, planName) => {
+  const { hasActivePlan, hasExpiredPlan, hasNoPlan } = subscriptionStatus;
+  const isAddOn = isAddOnPlan(planName);
+  const isRegular = isRegularPlan(planName);
+  
+  let canBuyRegular = false;
+  let canBuyAddon = false;
+  let disableReason = '';
+  
+  if (hasNoPlan) {
+    // No plan purchased: Can buy Regular, Cannot buy Add-on
+    canBuyRegular = isRegular;
+    canBuyAddon = false;
+    disableReason = isAddOn ? 'You need a base plan to purchase add-ons' : '';
+  } else if (hasActivePlan) {
+    // Has active plan: Cannot buy Regular, Can buy Add-on
+    canBuyRegular = false;
+    canBuyAddon = isAddOn;
+    disableReason = isRegular ? 'You already have an active plan' : '';
+  } else if (hasExpiredPlan) {
+    // Has expired plan: Can buy Regular, Cannot buy Add-on
+    canBuyRegular = isRegular;
+    canBuyAddon = false;
+    disableReason = isAddOn ? 'Your base plan has expired. Please renew your plan first.' : '';
+  }
+  
+  return {
+    canBuyRegular,
+    canBuyAddon,
+    canBuy: canBuyRegular || canBuyAddon,
+    disableReason,
+  };
+};
