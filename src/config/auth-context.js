@@ -13,6 +13,8 @@ export const AuthProvider = ({ children }) => {
   const [userId, setUserId] = useState(null)
   const [companyId, setCompanyId] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
+  // Subscription status from login API
+  const [subscriptionStatus, setSubscriptionStatus] = useState(null)
 
   useEffect(() => {
     loadPersistedAuthState()
@@ -25,6 +27,7 @@ export const AuthProvider = ({ children }) => {
       const storedCompanyId = await AsyncStorage.getItem("companyId")
       const storedUserRole = await AsyncStorage.getItem("userRole")
       const storedUserProfile = await AsyncStorage.getItem("userProfile")
+      const storedSubscriptionStatus = await AsyncStorage.getItem("subscriptionStatus")
 
       if (token && storedUserId && storedCompanyId && storedUserRole) {
         setIsAuthenticated(true)
@@ -36,6 +39,14 @@ export const AuthProvider = ({ children }) => {
             setUserProfile(JSON.parse(storedUserProfile))
           } catch {
             setUserProfile(null)
+          }
+        }
+        // Load subscription status
+        if (storedSubscriptionStatus) {
+          try {
+            setSubscriptionStatus(JSON.parse(storedSubscriptionStatus))
+          } catch {
+            setSubscriptionStatus(null)
           }
         }
       }
@@ -76,20 +87,21 @@ export const AuthProvider = ({ children }) => {
     try {
       await AsyncStorage.multiRemove(["authToken", "userId", "companyId", "userRole",
         "isBreakActive","breakStartTime","lastBreakType","isWorkActive","workStartTime","activeWorkReason",
-        "userProfile"
+        "userProfile", "subscriptionStatus"
       ])
       setIsAuthenticated(false)
       setUserId(null)
       setCompanyId(null)
       setUserRole(null)
       setUserProfile(null)
+      setSubscriptionStatus(null)
 
     } catch (error) {
       console.error("AuthContext: Error clearing auth data:", error)
     }
   }
 
-  const setAuthData = async (token, userId, companyId, role, userData = null) => {
+  const setAuthData = async (token, userId, companyId, role, userData = null, subscriptionStatusData = null) => {
     console.log('AuthContext: Setting auth data programmatically...');
     await AsyncStorage.setItem('authToken', `Bearer ${token}`);
     await AsyncStorage.setItem('userId', userId.toString());
@@ -102,6 +114,11 @@ export const AuthProvider = ({ children }) => {
     if (userData) {
       setUserProfile(userData);
       await AsyncStorage.setItem('userProfile', JSON.stringify(userData));
+    }
+    // Store subscription status
+    if (subscriptionStatusData) {
+      setSubscriptionStatus(subscriptionStatusData);
+      await AsyncStorage.setItem('subscriptionStatus', JSON.stringify(subscriptionStatusData));
     }
   };
 
@@ -121,6 +138,7 @@ export const AuthProvider = ({ children }) => {
         userId,
         companyId,
         userProfile,
+        subscriptionStatus,
         isPunchedIn,
         punchInTime,
         punchOutTime,

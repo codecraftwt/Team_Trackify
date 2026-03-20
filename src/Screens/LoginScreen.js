@@ -576,12 +576,17 @@ const LoginScreen = ({ navigation }) => {
         // Store user data in auth context
         // Check role_id from API response: 0 = user, 1 = admin
         const userRole = user.role_id === 1 ? 'Admin' : 'user';
+        
+        // Get subscription status from API response
+        const subscriptionStatusData = data.subscriptionStatus || null;
+        
         await setAuthData(
           token,
           user._id.toString(),
           user.createdby || '',
           userRole,
-          user
+          user,
+          subscriptionStatusData
         );
 
         console.log('User Logged In:', {
@@ -589,6 +594,7 @@ const LoginScreen = ({ navigation }) => {
           id: user._id,
           role: userRole,
           roleId: user.role_id,
+          subscriptionStatus: subscriptionStatusData,
         });
 
         // Store additional user info in AsyncStorage if needed
@@ -597,9 +603,6 @@ const LoginScreen = ({ navigation }) => {
         }
         if (user.email) {
           await AsyncStorage.setItem("userEmail", user.email);
-        }
-        if (data.subscriptionStatus) {
-          await AsyncStorage.setItem("subscriptionStatus", data.subscriptionStatus);
         }
 
         // Get and Log the FCM Token
@@ -614,7 +617,8 @@ const LoginScreen = ({ navigation }) => {
               name: 'Authenticated',
               params: {
                 userRole: userRole,
-                userData: user
+                userData: user,
+                subscriptionStatus: subscriptionStatusData
               }
             }],
           })

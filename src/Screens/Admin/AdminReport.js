@@ -8,14 +8,23 @@ import {
   TouchableOpacity,
   Modal,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Calendar } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CustomHeader from '../../Component/CustomHeader';
 import { getAdminAllTracks } from '../../config/AdminService';
+import { useAuth } from '../../config/auth-context';
+import { isSubscriptionExpired, getSubscriptionMessage } from '../../utils/subscriptionUtils';
 
-const AdminReport = ({ navigation }) => {
+const AdminReport = ({ navigation, route }) => {
+  const { subscriptionStatus: authSubscriptionStatus, userRole } = useAuth();
+  // Get subscription status from route params (passed from login)
+  const routeSubscriptionStatus = route?.params?.subscriptionStatus;
+  // Use route params first, then fall back to auth context
+  const subscriptionStatus = routeSubscriptionStatus || authSubscriptionStatus;
+  
   const [fromDate, setFromDate] = useState(null);
   const [toDate, setToDate] = useState(null);
   const [showFromCalendar, setShowFromCalendar] = useState(false);
@@ -28,6 +37,45 @@ const AdminReport = ({ navigation }) => {
   const [adminId, setAdminId] = useState(null);
   const [error, setError] = useState(null);
   const [isLoadingAdminId, setIsLoadingAdminId] = useState(true);
+
+  // Check if subscription is expired and show alert
+  useEffect(() => {
+    const checkSubscription = async () => {
+      // Try to get subscription status from multiple sources
+      let currentSubscriptionStatus = subscriptionStatus;
+      
+      if (!currentSubscriptionStatus) {
+        try {
+          const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+          if (storedStatus) {
+            currentSubscriptionStatus = JSON.parse(storedStatus);
+          }
+        } catch (err) {
+          console.error('Error loading subscription status:', err);
+        }
+      }
+      
+      if (userRole === 'Admin' && isSubscriptionExpired(currentSubscriptionStatus)) {
+        Alert.alert(
+          'Subscription Expired',
+          getSubscriptionMessage(currentSubscriptionStatus) || 'Your plan has expired. Please renew to continue.',
+          [
+            {
+              text: 'Go to Plans',
+              onPress: () => navigation.navigate('ManagePlans'),
+            },
+            {
+              text: 'Go to Dashboard',
+              onPress: () => navigation.navigate('AdminDashboard'),
+            },
+          ],
+          { cancelable: false }
+        );
+      }
+    };
+    
+    checkSubscription();
+  }, [subscriptionStatus]);
 
   // Get adminId from AsyncStorage on component mount
   useEffect(() => {

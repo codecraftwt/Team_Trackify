@@ -1548,8 +1548,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import CustomHeader from '../../Component/CustomHeader';
 import { getUserStats, getUserById, getLastFiveTrackedUsers } from '../../config/AdminService';
 import { useIsFocused } from '@react-navigation/native';
+import { useAuth } from '../../config/auth-context';
+import { isSubscriptionExpired, getSubscriptionMessage } from '../../utils/subscriptionUtils';
 
-const TeamTrackifyDashboard = ({ navigation }) => {
+const TeamTrackifyDashboard = ({ navigation, route }) => {
+  const { subscriptionStatus: authSubscriptionStatus, userRole } = useAuth();
+  // Get subscription status from route params (passed from login)
+  const routeSubscriptionStatus = route?.params?.subscriptionStatus;
+  // Use route params first, then fall back to auth context
+  const subscriptionStatus = routeSubscriptionStatus || authSubscriptionStatus;
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddOns, setShowAddOns] = useState(false);
@@ -1575,9 +1583,38 @@ const TeamTrackifyDashboard = ({ navigation }) => {
   const scrollViewRef = useRef(null);
   const isScreenFocused = useIsFocused();
 
+  // Check if subscription is expired
+  const isSubscriptionExpiredFlag = subscriptionStatus?.isExpired === true;
+  
+  // Get subscription warning message
+  const subscriptionMessage = getSubscriptionMessage(subscriptionStatus);
+
   useEffect(() => {
     fetchDashboardData();
+    loadSubscriptionStatus();
   }, []);
+
+  // Load subscription status from AsyncStorage
+  const loadSubscriptionStatus = async () => {
+    try {
+      // First check if we have it from route params or auth context
+      if (subscriptionStatus) {
+        setPlanExpired(subscriptionStatus.isExpired === true);
+        return;
+      }
+      
+      // If not, try to load from AsyncStorage
+      const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+      if (storedStatus) {
+        const parsedStatus = JSON.parse(storedStatus);
+        console.log('Loaded subscription status from storage:', parsedStatus);
+        // Update planExpired state based on stored subscription status
+        setPlanExpired(parsedStatus.isExpired === true);
+      }
+    } catch (error) {
+      console.error('Error loading subscription status:', error);
+    }
+  };
 
   // Add back handler for Android
   useEffect(() => {
@@ -1659,6 +1696,11 @@ const TeamTrackifyDashboard = ({ navigation }) => {
         getUserStats(userId)
       ]);
 
+      // LOG THE FULL USER RESPONSE TO SEE EXACT STRUCTURE
+    // console.log('========== COMPLETE USER RESPONSE ==========');
+    // console.log('User Result:', JSON.stringify(userResult, null, 2));
+
+    
       if (userResult.success) {
         console.log('User Data:', userResult.data);
         console.log('Plan Expired:', userResult.planExpired);
@@ -1795,6 +1837,26 @@ const TeamTrackifyDashboard = ({ navigation }) => {
         textAlign="center"
         titleStyle={{ fontSize: 24 }}
       />
+
+      {/* Subscription Expired Warning Banner */}
+      {isSubscriptionExpiredFlag && (
+        <View style={styles.expiredBanner}>
+          <Icon name="warning" size={24} color="#FFFFFF" />
+          <View style={styles.expiredBannerTextContainer}>
+            <Text style={styles.expiredBannerTitle}>Subscription Expired</Text>
+            <Text style={styles.expiredBannerText}>
+              {subscriptionMessage || 'Your plan has expired. Please renew to continue.'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.renewButton}
+            onPress={() => navigation.navigate('ManagePlans')}
+          >
+            <Text style={styles.renewButtonText}>Renew Plan</Text>
+            <Icon name="arrow-forward" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <ScrollView
         ref={scrollViewRef}
@@ -2202,6 +2264,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  // Subscription Expired Banner Styles
+  expiredBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DC3545',
+    padding: 15,
+    marginHorizontal: 10,
+    marginTop: 10,
+    borderRadius: 10,
+  },
+  expiredBannerTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  expiredBannerTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  expiredBannerText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  renewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  renewButtonText: {
+    color: '#DC3545',
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 4,
   },
   loadingText: {
     marginTop: 10,

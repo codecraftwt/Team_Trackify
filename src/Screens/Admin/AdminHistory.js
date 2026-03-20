@@ -18,10 +18,18 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Icon2 from 'react-native-vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../config/auth-context';
-import { getAdminUsers, updateUser, deleteUser, registerUser } from '../../config/AdminService'; 
+import { getAdminUsers, updateUser, deleteUser, registerUser } from '../../config/AdminService';
+import { isSubscriptionExpired, getSubscriptionMessage } from '../../utils/subscriptionUtils';
 
-const AdminHistory = ({ navigation }) => {
+const AdminHistory = ({ navigation, route }) => {
+  const { subscriptionStatus: authSubscriptionStatus, userRole } = useAuth();
+  // Get subscription status from route params (passed from login)
+  const routeSubscriptionStatus = route?.params?.subscriptionStatus;
+  // Use route params first, then fall back to auth context
+  const subscriptionStatus = routeSubscriptionStatus || authSubscriptionStatus;
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('active');
   const [users, setUsers] = useState([]);
@@ -47,6 +55,48 @@ const AdminHistory = ({ navigation }) => {
     address: '',
     role_id: 0, // Default to User
   });
+
+  // Check if subscription is expired
+  const checkSubscription = async () => {
+    // Try to get subscription status from multiple sources
+    let currentSubscriptionStatus = subscriptionStatus;
+    
+    if (!currentSubscriptionStatus) {
+      try {
+        const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+        if (storedStatus) {
+          currentSubscriptionStatus = JSON.parse(storedStatus);
+        }
+      } catch (error) {
+        console.error('Error loading subscription status:', error);
+      }
+    }
+    
+    if (userRole === 'Admin' && isSubscriptionExpired(currentSubscriptionStatus)) {
+      Alert.alert(
+        'Subscription Expired',
+        getSubscriptionMessage(currentSubscriptionStatus) || 'Your plan has expired. Please renew to continue.',
+        [
+          {
+            text: 'Go to Plans',
+            onPress: () => navigation.navigate('ManagePlans'),
+          },
+          {
+            text: 'Go to Dashboard',
+            onPress: () => navigation.navigate('AdminDashboard'),
+          },
+        ],
+        { cancelable: false }
+      );
+      return false;
+    }
+    return true;
+  };
+
+  // Check subscription on mount
+  useEffect(() => {
+    checkSubscription();
+  }, [subscriptionStatus]);
   
   // Edit user form state
   const [editUserData, setEditUserData] = useState({
@@ -107,6 +157,21 @@ const AdminHistory = ({ navigation }) => {
 
   // Handle add user - Open modal
   const handleAddUser = () => {
+    // Check subscription before allowing add user
+    if (userRole === 'Admin' && isSubscriptionExpired(subscriptionStatus)) {
+      Alert.alert(
+        'Subscription Expired',
+        getSubscriptionMessage(subscriptionStatus) || 'Your plan has expired. Please renew to add new users.',
+        [
+          {
+            text: 'Go to Plans',
+            onPress: () => navigation.navigate('ManagePlans'),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     setNewUserData({
       name: '',
       email: '',
@@ -182,6 +247,21 @@ const AdminHistory = ({ navigation }) => {
 
   // Handle edit user - Open edit modal with user data
   const handleEditUser = (user) => {
+    // Check subscription before allowing edit user
+    if (userRole === 'Admin' && isSubscriptionExpired(subscriptionStatus)) {
+      Alert.alert(
+        'Subscription Expired',
+        getSubscriptionMessage(subscriptionStatus) || 'Your plan has expired. Please renew to edit users.',
+        [
+          {
+            text: 'Go to Plans',
+            onPress: () => navigation.navigate('ManagePlans'),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     setSelectedUser(user);
     setEditUserData({
       name: user.name || '',
@@ -244,6 +324,21 @@ const AdminHistory = ({ navigation }) => {
 
   // Handle delete user
   const handleDeleteUser = (user) => {
+    // Check subscription before allowing delete user
+    if (userRole === 'Admin' && isSubscriptionExpired(subscriptionStatus)) {
+      Alert.alert(
+        'Subscription Expired',
+        getSubscriptionMessage(subscriptionStatus) || 'Your plan has expired. Please renew to delete users.',
+        [
+          {
+            text: 'Go to Plans',
+            onPress: () => navigation.navigate('ManagePlans'),
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     Alert.alert(
       'Delete User',
       `Are you sure you want to delete ${user.name}?`,

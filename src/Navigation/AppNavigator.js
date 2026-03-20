@@ -194,8 +194,9 @@ const AuthStack = () => (
 // Stack for all authenticated screens (both user and admin)
 // This stack will have its initial route determined by the user's role
 const AuthenticatedStack = ({ route }) => {
-  const { userRole } = route.params; // Get userRole from route params
-  console.log('userRole', userRole);
+  const { userRole, subscriptionStatus } = route.params; // Get userRole and subscriptionStatus from route params
+  // console.log('userRole', userRole);
+  // console.log('subscriptionStatus', subscriptionStatus);
 
   const isAdminLike =
     userRole === 'Super Admin' ||
