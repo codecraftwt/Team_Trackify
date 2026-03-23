@@ -418,7 +418,7 @@ export const startSession = async (photoFile) => {
       validateStatus: (status) => status >= 200 && status < 300,
     });
     const data = response?.data;
-    console.log("startSession ---------->", data);
+    // console.log("startSession ---------->", data);
     return data;
   } catch (error) {
     console.error('Failed to start session:', error);
@@ -474,13 +474,13 @@ export const addLocationOfflineFirst = async (sessionId, locationData, formData)
     isOnline,
   };
   
-  console.log('Saving location to offline store:', {
-    sessionId,
-    lat: locationData.latitude?.toFixed(6),
-    lng: locationData.longitude?.toFixed(6),
-    source: locationData.source,
-    timestamp: locationData.timestamp
-  });
+  // console.log('Saving location to offline store:', {
+  //   sessionId,
+  //   lat: locationData.latitude?.toFixed(6),
+  //   lng: locationData.longitude?.toFixed(6),
+  //   source: locationData.source,
+  //   timestamp: locationData.timestamp
+  // });
   
   const pointId = await saveLocationPoint(locationPayload);
   
@@ -518,7 +518,7 @@ export const addLocationWithFormData = async (sessionId, formData) => {
       }
     );
     
-    console.log(`Location sent successfully to session ${sessionId}, status: ${response.status}`);
+    // console.log(`Location sent successfully to session ${sessionId}, status: ${response.status}`);
     return { success: true, status: response.status };
   } catch (error) {
     // console.error('Failed to send location:', error);
@@ -539,7 +539,7 @@ export const addLocationWithPhoto = async (sessionId, formData) => {
         validateStatus: (status) => status === 204 || status === 200,
       }
     );
-    console.log('Photo with location sent successfully');
+    // console.log('Photo with location sent successfully');
     return { success: true, status: response.status };
   } catch (error) {
     console.error('Failed to send photo with location:', error);
@@ -576,7 +576,7 @@ export const addLocationWithPhotoOfflineFirst = async (sessionId, locationData, 
         photoFile.uri,
         photoFile.fileName || `photo_${timestamp}.jpg`
       );
-      console.log('Photo copied to offline storage:', persistedPhotoPath);
+      // console.log('Photo copied to offline storage:', persistedPhotoPath);
     } catch (copyError) {
       console.error('Failed to copy photo to offline storage:', copyError);
       return { success: false, error: copyError };
@@ -677,9 +677,9 @@ export const getSessionDetails = async (sessionId) => {
 export const testSessionLocations = async (sessionId) => {
   try {
     const { data } = await getRequest(`${TRACKING_BASE}/sessions/${sessionId}`);
-    console.log("Session Locations Test:");
-    console.log("Total locations:", data?.locations?.length || 0);
-    console.log("Sample locations:", data?.locations?.slice(0, 5));
+    // console.log("Session Locations Test:");
+    // console.log("Total locations:", data?.locations?.length || 0);
+    // console.log("Sample locations:", data?.locations?.slice(0, 5));
     return data?.locations || [];
   } catch (error) {
     console.error('Failed to test session locations:', error);
@@ -733,14 +733,14 @@ export const deleteSession = async (sessionId) => {
 };
 
 export const getUserTrackingDates = async (userId) => {
-  console.log('getUserTrackingDates called with userId:', userId);
+  // console.log('getUserTrackingDates called with userId:', userId);
   try {
     const response = await Api.get(
       `${TRACKING_BASE}/admin/users/${userId}/sessions/dates`
     );
 
-    console.log('getUserTrackingDates raw response status:', response.status);
-    console.log('getUserTrackingDates raw response data:', response.data);
+    // console.log('getUserTrackingDates raw response status:', response.status);
+    // console.log('getUserTrackingDates raw response data:', response.data);
 
     const data = response.data;
     if (data?.success && data?.data) {

@@ -465,12 +465,12 @@ const LocationTrackingScreen = () => {
         .sort((a, b) => a.timestamp - b.timestamp);
 
       setLocations(points);
-      console.log('Loaded session locations:', {
-        sessionId,
-        count: points.length,
-        first: points[0],
-        last: points[points.length - 1],
-      });
+      // console.log('Loaded session locations:', {
+      //   sessionId,
+      //   count: points.length,
+      //   first: points[0],
+      //   last: points[points.length - 1],
+      // });
       const photoPoints = points.filter(p => p.photoUri || p.remark || p.amount);
       setPhotoEntries(photoPoints);
 
@@ -503,7 +503,19 @@ const LocationTrackingScreen = () => {
 
   const sendLocationPoint = useCallback(async (location, source = 'foreground') => {
     const sessionId = sessionIdRef.current;
-    if (!sessionId || !location) return false;
+    
+    // CRITICAL: Check if tracking is still active before sending location
+    // This prevents locations from being sent after punch out
+    if (!sessionId || !location || !trackingRef.current) {
+      // console.log('sendLocationPoint: Tracking not active or no session, skipping');
+      return false;
+    }
+
+    // Also check if punch out is in progress (photo capture for end)
+    if (punchOutPausedServicesRef.current) {
+      // console.log('sendLocationPoint: Punch out in progress, skipping');
+      return false;
+    }
 
     if (
       lastPointRef.current &&
@@ -582,7 +594,7 @@ const LocationTrackingScreen = () => {
       isOnline: online,
     };
 
-    console.log('Sending location point:', payload);
+    // console.log('Sending location point:', payload);
 
     const result = await TrackingService.addLocationOfflineFirst(sessionId, payload, formData);
     if (result?.success) {
@@ -598,7 +610,14 @@ const LocationTrackingScreen = () => {
     }
 
     locationTimerRef.current = setInterval(async () => {
+      // Check if tracking is still active before getting location
       if (!trackingRef.current || appStateRef.current !== 'active') {
+        stopForegroundTimers();
+        return;
+      }
+      
+      // Additional check: ensure session is still valid
+      if (!sessionIdRef.current) {
         stopForegroundTimers();
         return;
       }
@@ -630,6 +649,16 @@ const LocationTrackingScreen = () => {
       return;
     }
 
+    // CRITICAL: Set tracking to false IMMEDIATELY to prevent any more locations from being sent
+    // This must happen BEFORE stopping services and capturing photo
+    trackingRef.current = false;
+    setIsTracking(false);
+    
+    // CRITICAL: Clear session ID immediately to block ALL location sending
+    // This ensures no location can be sent after punch out, even if other checks fail
+    const sessionIdToEnd = sessionIdRef.current;
+    sessionIdRef.current = null;
+    
     // End tracking requires a photo (Punch Out).
     setLoading(true);
     stopForegroundTimers();
@@ -652,7 +681,11 @@ const LocationTrackingScreen = () => {
     if (!endPhotoFile?.uri) {
       // Photo is required; resume timers and keep tracking active.
       punchOutPausedServicesRef.current = false;
-      if (trackingRef.current) {
+      // Restore tracking state since photo was not captured
+      trackingRef.current = true;
+      sessionIdRef.current = sessionIdToEnd; // Restore session ID
+      setIsTracking(true);
+      if (sessionIdRef.current) {
         try {
           await startNativeForegroundService();
         } catch {
@@ -671,9 +704,7 @@ const LocationTrackingScreen = () => {
       return;
     }
 
-    trackingRef.current = false;
     await setTrackingPipEnabled(false);
-    setIsTracking(false);
     stopForegroundTimers();
     if (durationTimerRef.current) {
       clearInterval(durationTimerRef.current);
@@ -681,14 +712,19 @@ const LocationTrackingScreen = () => {
     }
 
     try {
+      // IMPORTANT: Do NOT sync buffered native points when ending session
+      // These are old locations that would incorrectly add to the distance
       await syncNativeBufferedPointsForSession(sessionId);
-      await TrackingService.endSessionOfflineFirst(sessionId, endPhotoFile);
+      
+      await TrackingService.endSessionOfflineFirst(sessionIdToEnd, endPhotoFile);
       await AsyncStorage.removeItem(LAST_SESSION_KEY);
-      // Don't block UI on potentially long sync; kick it off in background.
+      
+      // Do NOT sync pending locations when ending - they would add more distance
       void syncPendingLocations().catch(() => undefined);
-      await loadSessionLocations(sessionId, true);
+      
+      await loadSessionLocations(sessionIdToEnd, true);
 
-      navigation.navigate('TrackingSessionDetail', { sessionId });
+      navigation.navigate('TrackingSessionDetail', { sessionId: sessionIdToEnd });
       showAlert('Tracking Stopped', 'Session saved successfully.', 'success');
     } catch (error) {
       showAlert(
@@ -696,7 +732,7 @@ const LocationTrackingScreen = () => {
         error?.message || 'Tracking stopped, but final sync failed. Data is still stored offline.',
         'warning',
       );
-      navigation.navigate('TrackingSessionDetail', { sessionId });
+      navigation.navigate('TrackingSessionDetail', { sessionId: sessionIdToEnd });
     } finally {
       punchOutPausedServicesRef.current = false;
       sessionIdRef.current = null;
@@ -712,10 +748,40 @@ const LocationTrackingScreen = () => {
     startForegroundTimers,
     stopForegroundTimers,
   ]);
-
   const startTracking = useCallback(async () => {
     setLoading(true);
     try {
+      // STEP 1: Check if location services are enabled
+      const isLocationEnabled = await isNativeLocationEnabled();
+      if (!isLocationEnabled) {
+        setLoading(false);
+        Alert.alert(
+          'Location Services Disabled',
+          'Please enable device location (GPS) to start tracking.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: async () => {
+                try {
+                  if (Platform.OS === 'android' && typeof Linking.sendIntent === 'function') {
+                    await Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+                  } else {
+                    await Linking.openSettings();
+                  }
+                  // Don't auto-retry - user will click Punch In again
+                } catch {
+                  await Linking.openSettings();
+                }
+              },
+            },
+          ],
+          { cancelable: true }
+        );
+        return;
+      }
+
+      // STEP 2: Request location permissions if not already granted
       const hasPermission = await requestLocationPermission();
       if (!hasPermission) {
         showAlert('Permission Required', 'Location permission is required to start tracking.');
@@ -723,18 +789,33 @@ const LocationTrackingScreen = () => {
         return;
       }
 
-      // Start tracking requires a photo (Punch In).
+      // STEP 3: Get initial location first (to ensure GPS is actually working)
+      let initialLocation;
+      try {
+        initialLocation = await getCurrentLocation();
+      } catch (locationError) {
+        console.error('Failed to get initial location:', locationError);
+        Alert.alert(
+          'Location Error',
+          'Unable to get your current location. Please make sure GPS is enabled and you have a clear view of the sky.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        setLoading(false);
+        return;
+      }
+
+      // STEP 4: Now open camera for punch-in photo
       const startPhotoFile = await captureCameraPhoto('punch_in');
       if (!startPhotoFile?.uri) {
         setLoading(false);
         return;
       }
 
-      const initialLocation = await getCurrentLocation();
+      // STEP 5: Start the tracking session
       const started = await TrackingService.startSessionOfflineFirst(startPhotoFile);
-      console.log('Start tracking response:', started);
+      // console.log('Start tracking response:', started);
       const sessionId = started?.sessionId;
-      console.log("sessionId ----", sessionId);
+      // console.log("sessionId ----", sessionId);
 
       if (!sessionId) {
         throw new Error('Failed to start tracking session');
@@ -760,7 +841,10 @@ const LocationTrackingScreen = () => {
         }),
       );
 
+      // STEP 6: Send the initial location point
       await sendLocationPoint(initialLocation, 'start');
+
+      // STEP 7: Start foreground services and timers
       await startNativeForegroundService();
       await setTrackingPipEnabled(isScreenFocused);
       await loadSessionLocations(sessionId, true);
@@ -772,13 +856,10 @@ const LocationTrackingScreen = () => {
 
       showAlert('Tracking Started', 'Your location is now being tracked.', 'success');
     } catch (error) {
+      console.error('Start tracking error:', error);
       setIsTracking(false);
       trackingRef.current = false;
-      if (error?.message === 'Location disabled') {
-        showSystemLocationDisabledAlert();
-      } else {
-        showAlert('Cannot Start Tracking', error?.message || 'Please try again.');
-      }
+      showAlert('Cannot Start Tracking', error?.message || 'Please try again.');
     } finally {
       setLoading(false);
     }
@@ -789,7 +870,6 @@ const LocationTrackingScreen = () => {
     loadSessionLocations,
     requestLocationPermission,
     sendLocationPoint,
-    showSystemLocationDisabledAlert,
     showAlert,
     startForegroundTimers,
   ]);
@@ -1006,23 +1086,6 @@ const LocationTrackingScreen = () => {
     tempRemark,
   ]);
 
-  const refreshLocations = useCallback(async () => {
-    if (!sessionIdRef.current) return;
-    setLoading(true);
-    try {
-      await syncNativeBufferedPointsForSession(sessionIdRef.current);
-      const result = await syncPendingLocations();
-      await loadSessionLocations(sessionIdRef.current, true);
-      if (result?.synced > 0) {
-        showAlert('Synced', `${result.synced} offline points synced.`, 'success');
-      } else {
-        showAlert('Refreshed', 'Latest locations loaded.', 'info');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [loadSessionLocations, showAlert]);
-
   useEffect(() => {
     const boot = async () => {
       try {
@@ -1103,7 +1166,8 @@ const LocationTrackingScreen = () => {
           // no-op
         }
         const sid = sessionIdRef.current;
-        if (sid) {
+        if (sid && trackingRef.current) {
+          // Only sync if tracking is still active (session not ended)
           // 1) Merge any buffered native points into local DB (fast)
           await syncNativeBufferedPointsForSession(sid);
           // 2) Render polyline immediately from local DB (no network wait)

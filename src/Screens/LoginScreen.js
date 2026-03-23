@@ -496,8 +496,8 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleLogin = async () => {
-    console.log("BASE_URL", BASE_URL);
-    console.log("Login attempt with email:", email?.trim());
+    // console.log("BASE_URL", BASE_URL);
+    // console.log("Login attempt with email:", email?.trim());
 
     // Validate email and password
     if (!email.trim()) {
@@ -540,7 +540,7 @@ const LoginScreen = ({ navigation }) => {
         }),
       });
 
-      console.log("Login---", response);
+      // console.log("Login---", response);
 
       const text = await response.text();
 
@@ -566,7 +566,7 @@ const LoginScreen = ({ navigation }) => {
         return;
       }
 
-      console.log("Login API Response:", data);
+      // console.log("Login API Response:", data);
 
       // Check if login was successful (status: 1)
       if (response.ok && data.status === 1 && data.token) {
@@ -589,13 +589,13 @@ const LoginScreen = ({ navigation }) => {
           subscriptionStatusData
         );
 
-        console.log('User Logged In:', {
-          name: user.name,
-          id: user._id,
-          role: userRole,
-          roleId: user.role_id,
-          subscriptionStatus: subscriptionStatusData,
-        });
+        // console.log('User Logged In:', {
+        //   name: user.name,
+        //   id: user._id,
+        //   role: userRole,
+        //   roleId: user.role_id,
+        //   subscriptionStatus: subscriptionStatusData,
+        // });
 
         // Store additional user info in AsyncStorage if needed
         if (user.name) {
@@ -607,7 +607,7 @@ const LoginScreen = ({ navigation }) => {
 
         // Get and Log the FCM Token
         const fcmToken = await NotificationManager.getFCMToken();
-        console.log("🔥 Successfully Logged In. Firebase ID (FCM Token):", fcmToken);
+        // console.log("🔥 Successfully Logged In. Firebase ID (FCM Token):", fcmToken);
 
         // Reset navigation stack to the authenticated flow
         navigation.dispatch(

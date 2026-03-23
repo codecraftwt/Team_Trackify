@@ -37,11 +37,11 @@ export const callAttendanceLogAPI = async ({
   workOutReason = "",
 }) => {
   try {
-    console.log("AttendanceService Received Raw Params:", {
-        inTimeReceived: inTime,
-        outTimeReceived: outTime,
-        remarkReceived: remark,
-    });
+    // console.log("AttendanceService Received Raw Params:", {
+    //     inTimeReceived: inTime,
+    //     outTimeReceived: outTime,
+    //     remarkReceived: remark,
+    // });
     const authToken = await AsyncStorage.getItem("authToken")
     const companyId = await AsyncStorage.getItem("companyId")
     const userId = await AsyncStorage.getItem("userId")
@@ -97,7 +97,7 @@ const workingDayStr = currentDate.toISOString().split("T")[0] // Extract YYYY-MM
       })
     }
 
-    console.log("Submitting attendance FormData:", formData)
+    // console.log("Submitting attendance FormData:", formData)
 
     const response = await fetch(`${BASE_URL}/Attendance/AddUpdateAttendanceDaily`, {
       method: "POST",
@@ -106,12 +106,12 @@ const workingDayStr = currentDate.toISOString().split("T")[0] // Extract YYYY-MM
     })
 
     const text = await response.text()
-    console.log("Raw AddUpdateAttendanceDaily Response:", response.status, text)
+    // console.log("Raw AddUpdateAttendanceDaily Response:", response.status, text)
 
     if (response.ok) {
       try {
         const data = JSON.parse(text)
-        console.log("Attendance success:", data)
+        // console.log("Attendance success:", data)
         return true
       } catch {
         return true

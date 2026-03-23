@@ -76,7 +76,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
       const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
       if (storedStatus) {
         const parsedStatus = JSON.parse(storedStatus);
-        console.log('Loaded subscription status from storage:', parsedStatus);
+        // console.log('Loaded subscription status from storage:', parsedStatus);
         // Update planExpired state based on stored subscription status
         setPlanExpired(parsedStatus.isExpired === true);
       }
@@ -123,10 +123,10 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
       const result = await getLastFiveTrackedUsers(adminId);
       
       if (result.success) {
-        console.log('Recent Activities Data:', result.data);
+        // console.log('Recent Activities Data:', result.data);
         setRecentActivities(result.data || []);
       } else {
-        console.log('Error fetching recent activities:', result.message);
+        // console.log('Error fetching recent activities:', result.message);
         if (result.unauthorized) {
           Alert.alert('Session Expired', 'Please login again');
           navigation.navigate('Login');

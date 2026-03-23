@@ -64,7 +64,7 @@ export const updateAttendanceDaily = async (isPunchIn, inTime = null, outTime = 
       isActive: true,
     }
 
-    console.log("Attendance Request Body:", JSON.stringify(requestBody, null, 2))
+    // console.log("Attendance Request Body:", JSON.stringify(requestBody, null, 2))
 
     const response = await fetch(`${BASE_URL}/Attendance/GetUpdateAttendanceDailyRequest`, {
       method: "POST",
@@ -75,7 +75,7 @@ export const updateAttendanceDaily = async (isPunchIn, inTime = null, outTime = 
       body: JSON.stringify(requestBody),
     })
 
-    console.log("API Response Status:", response.status)
+    // console.log("API Response Status:", response.status)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -84,7 +84,7 @@ export const updateAttendanceDaily = async (isPunchIn, inTime = null, outTime = 
     }
 
     const data = await response.json()
-    console.log("API Success Response:", data)
+    // console.log("API Success Response:", data)
 
     return {
       success: true,

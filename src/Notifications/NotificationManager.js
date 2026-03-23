@@ -39,7 +39,7 @@ class NotificationManager {
 async initialize() {
     if (this.isInitialized) return
 
-    console.log("🔔 Initializing NotificationManager...")
+    // console.log("🔔 Initializing NotificationManager...")
 
     const permissionStatus = await this.requestPermission()
     if (permissionStatus) {
@@ -53,7 +53,7 @@ async initialize() {
     }
 
     this.isInitialized = true
-    console.log("✅ NotificationManager initialized")
+    // console.log("✅ NotificationManager initialized")
     return permissionStatus
   }
 
@@ -381,7 +381,7 @@ async getFCMToken() {
   try {
     let token = await AsyncStorage.getItem("fcmToken")
     if (token) {
-      console.log("FCM Token found in AsyncStorage:", token)
+      // console.log("FCM Token found in AsyncStorage:", token)
       return token
     }
 
@@ -394,7 +394,7 @@ async getFCMToken() {
     token = await messaging().getToken()
     if (token) {
       await AsyncStorage.setItem("fcmToken", token)
-      console.log("FCM Token obtained and saved:", token)
+      // console.log("FCM Token obtained and saved:", token)
       return token
     }
     return null
@@ -422,7 +422,7 @@ async registerDeviceToken(userId) {
     isActive: true,
   }
 
-  console.log("[v0] Register payload:", payload)
+  // console.log("[v0] Register payload:", payload)
 
   try {
     const headers = {
@@ -431,7 +431,7 @@ async registerDeviceToken(userId) {
       // ...(token ? { Authorization: `Bearer ${token}` } : {}),
     }
 
-    console.log("[v0] Register headers:", headers)
+    // console.log("[v0] Register headers:", headers)
 
     const response = await fetch("http://180.179.21.98:8087/api/NotificationDevice", {
       method: "POST",
@@ -448,11 +448,11 @@ async registerDeviceToken(userId) {
       body = rawText
     }
 
-    console.log("[v0] Register status:", response.status)
-    console.log("[v0] Register body:", body)
+    // console.log("[v0] Register status:", response.status)
+    // console.log("[v0] Register body:", body)
 
     if (response.ok) {
-      console.log("✅ Device token registered successfully for user:", userId)
+      // console.log("✅ Device token registered successfully for user:", userId)
       return true
     } else {
       console.error("❌ Failed to register device token:", response.status, body)
@@ -473,7 +473,7 @@ async registerDeviceToken(userId) {
     }
 
     try {
-      console.log("📝 Unregistering device token for user:", userId)
+      // console.log("📝 Unregistering device token for user:", userId)
       const response = await fetch("http://180.179.21.98:8087/api/NotificationDevice", {
         method: "PUT",
         headers: {
@@ -489,7 +489,7 @@ async registerDeviceToken(userId) {
       })
 
       if (response.ok) {
-        console.log("✅ Device token unregistered successfully for user:", userId)
+        // console.log("✅ Device token unregistered successfully for user:", userId)
       } else {
         const errorText = await response.text()
         console.error("❌ Failed to unregister device token:", response.status, errorText)
@@ -500,7 +500,7 @@ async registerDeviceToken(userId) {
   }
 
   handleNotificationNavigation(data) {
-    console.log("🔗 Handling notification navigation with data:", data)
+    // console.log("🔗 Handling notification navigation with data:", data)
 
     if (data?.leadId) {
       console.log("Should navigate to lead:", data.leadId)
@@ -530,7 +530,7 @@ async registerDeviceToken(userId) {
   }
 
   testBanner() {
-    console.log("🧪 Testing banner display...")
+    // console.log("🧪 Testing banner display...")
     this.showBanner("Test Notification", "This is a test message", {})
   }
 }

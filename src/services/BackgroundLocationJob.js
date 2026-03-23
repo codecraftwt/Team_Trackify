@@ -174,17 +174,17 @@ const sendLocationPointToServer = async (sessionId, location) => {
       isOnline: online,
     };
     
-    console.log(`Background: Sending location to session ${sessionId}:`, {
-      lat: latitude.toFixed(6),
-      lng: longitude.toFixed(6),
-      accuracy: location.accuracy,
-      time: new Date().toLocaleTimeString()
-    });
+    // console.log(`Background: Sending location to session ${sessionId}:`, {
+    //   lat: latitude.toFixed(6),
+    //   lng: longitude.toFixed(6),
+    //   accuracy: location.accuracy,
+    //   time: new Date().toLocaleTimeString()
+    // });
     
     const result = await TrackingService.addLocationOfflineFirst(sessionId, locationData, formData);
 
     if (result.success) {
-      console.log(`Background: Location ${result.synced ? 'synced' : 'saved offline'} (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`);
+      // console.log(`Background: Location ${result.synced ? 'synced' : 'saved offline'} (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`);
       return { success: true, location: { latitude, longitude } };
     } else {
       console.warn('Background: Failed to save location');
@@ -205,7 +205,7 @@ const backgroundLocationTask = async (taskData) => {
     return;
   }
 
-  console.log(`Background task started for session: ${sessionId}`);
+  // console.log(`Background task started for session: ${sessionId}`);
   isTaskRunning = true;
 
   let locationCount = 0;
@@ -222,7 +222,7 @@ const backgroundLocationTask = async (taskData) => {
 
     while (BackgroundService.isRunning() && isTaskRunning) {
       try {
-        console.log(`Background: Getting location (attempt ${locationCount + 1})...`);
+        // console.log(`Background: Getting location (attempt ${locationCount + 1})...`);
         
         const location = await getCurrentLocationWithRetry();
         
@@ -238,7 +238,7 @@ const backgroundLocationTask = async (taskData) => {
             );
             
             if (distance < CONFIG.MIN_DISTANCE_METERS) {
-              console.log(`Background: Location skipped (moved only ${distance.toFixed(1)}m)`);
+              // console.log(`Background: Location skipped (moved only ${distance.toFixed(1)}m)`);
               shouldSend = false;
             }
           }
@@ -265,7 +265,7 @@ const backgroundLocationTask = async (taskData) => {
                 taskDesc: `Tracking active • ${locationCount} points • Last: ${timeStr}`,
               });
               
-              console.log(`Background: Location sent successfully. Total: ${locationCount}`);
+              // console.log(`Background: Location sent successfully. Total: ${locationCount}`);
 
               // Periodically flush any offline/native-buffered points to server while background.
               if (locationCount - lastFlushAtCount >= FLUSH_EVERY_N_POINTS) {
@@ -273,14 +273,14 @@ const backgroundLocationTask = async (taskData) => {
                 try {
                   const merged = await syncNativeBufferedPointsForSession(sessionId);
                   if (merged?.inserted > 0) {
-                    console.log(`Background: merged native buffered points: ${merged.inserted}`);
+                    // console.log(`Background: merged native buffered points: ${merged.inserted}`);
                   }
                 } catch (e) {
                   console.warn('Background: native buffer sync failed:', e?.message || String(e));
                 }
                 try {
                   const syncRes = await syncPendingLocations();
-                  console.log(`Background: pending sync result: ${syncRes?.synced ?? 0}`);
+                  // console.log(`Background: pending sync result: ${syncRes?.synced ?? 0}`);
                 } catch (e) {
                   console.warn('Background: pending sync failed:', e?.message || String(e));
                 }
@@ -341,7 +341,7 @@ const backgroundLocationTask = async (taskData) => {
       taskDesc: 'Tracking error - restart app',
     });
   } finally {
-    console.log(`Background task ended. Sent ${locationCount} locations.`);
+    // console.log(`Background task ended. Sent ${locationCount} locations.`);
     isTaskRunning = false;
     
     try {
@@ -384,12 +384,12 @@ export const startBackgroundLocationJob = async (sessionId, intervalMs = LOCATIO
     }
     
     if (BackgroundService.isRunning()) {
-      console.log('Background service already running, stopping first...');
+      // console.log('Background service already running, stopping first...');
       await stopBackgroundLocationJob();
       await sleep(1000);
     }
 
-    console.log(`Starting background service for session: ${sessionId}`);
+    // console.log(`Starting background service for session: ${sessionId}`);
     
     if (Platform.OS === 'android') {
       try {
@@ -422,13 +422,13 @@ export const startBackgroundLocationJob = async (sessionId, intervalMs = LOCATIO
       },
     });
     
-    console.log('Background service started successfully');
+    // console.log('Background service started successfully');
     return true;
   } catch (error) {
     console.error('Failed to start background service:', error);
     
     if (Platform.OS === 'android' && error.message.includes('not allowed')) {
-      console.log('Trying alternative background service start...');
+      // console.log('Trying alternative background service start...');
       try {
         await BackgroundService.start(backgroundLocationTask, {
           ...optionsBase,
@@ -451,7 +451,7 @@ export const startBackgroundLocationJob = async (sessionId, intervalMs = LOCATIO
 
 export const stopBackgroundLocationJob = async () => {
   try {
-    console.log('Stopping background service...');
+    // console.log('Stopping background service...');
     isTaskRunning = false;
     
     if (BackgroundService.isRunning()) {
@@ -507,7 +507,7 @@ export const getBackgroundServiceStatus = () => {
 
 export const restartBackgroundLocationJob = async (sessionId, intervalMs = LOCATION_POLL_INTERVAL_MS) => {
   try {
-    console.log('Restarting background service...');
+    // console.log('Restarting background service...');
     await stopBackgroundLocationJob();
     await sleep(2000);
     return await startBackgroundLocationJob(sessionId, intervalMs);

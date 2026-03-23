@@ -129,7 +129,7 @@ export const getPaymentHistory = async (adminId) => {
 export const createOrder = async (planId, couponCode = null) => {
   try {
     const adminId = await getAdminId();
-    console.log('Admin ID from storage:', adminId);
+    // console.log('Admin ID from storage:', adminId);
     
     if (!adminId) {
       throw new Error('Admin ID not found. Please login again.');
@@ -140,10 +140,10 @@ export const createOrder = async (planId, couponCode = null) => {
     if (!token) {
       token = await AsyncStorage.getItem('authToken');
     }
-    console.log('Auth token found:', !!token);
+    // console.log('Auth token found:', !!token);
     
     // Log the exact admin ID being sent
-    console.log('Sending request with:', { adminId, planId, couponCode });
+    // console.log('Sending request with:', { adminId, planId, couponCode });
     
     const response = await Api.post('/api/payments/create-order', {
       adminId,
@@ -155,7 +155,7 @@ export const createOrder = async (planId, couponCode = null) => {
       } : {}
     });
     
-    console.log('Create order response:', response.data);
+    // console.log('Create order response:', response.data);
     return response.data;
   } catch (error) {
     console.error('Create order error details:', {
@@ -184,12 +184,12 @@ export const createOrder = async (planId, couponCode = null) => {
 // In PlansService.js
 export const verifyPayment = async (razorpayOrderId, razorpayPaymentId, razorpaySignature, paymentId) => {
   try {
-    console.log('=== verifyPayment called with:', {
-      razorpayOrderId,
-      razorpayPaymentId,
-      razorpaySignature: razorpaySignature ? 'present' : 'missing',
-      paymentId
-    });
+    // console.log('=== verifyPayment called with:', {
+    //   razorpayOrderId,
+    //   razorpayPaymentId,
+    //   razorpaySignature: razorpaySignature ? 'present' : 'missing',
+    //   paymentId
+    // });
     
     const response = await Api.post('/api/payments/verify-payment', {
       razorpayOrderId,
@@ -198,7 +198,7 @@ export const verifyPayment = async (razorpayOrderId, razorpayPaymentId, razorpay
       paymentId,
     });
     
-    console.log('=== verifyPayment response:', response.data);
+    // console.log('=== verifyPayment response:', response.data);
     return response.data;
   } catch (error) {
     console.error('=== verifyPayment error details:', {
@@ -303,7 +303,7 @@ export const getUserSubscriptionStatus = async () => {
       } : {}
     });
     
-    console.log('User subscription status response:', response.data);
+    // console.log('User subscription status response:', response.data);
     
     // Parse the response to extract subscription info
     const userData = response.data.user;
@@ -323,7 +323,7 @@ export const getUserSubscriptionStatus = async () => {
       planExpired: planExpired,
     };
     
-    console.log('Subscription status:', subscriptionStatus);
+    // console.log('Subscription status:', subscriptionStatus);
     
     return subscriptionStatus;
   } catch (error) {

@@ -83,7 +83,7 @@ export const AuthProvider = ({ children }) => {
 
 
   const clearAuthData = async () => {
-    console.log('AuthContext: Clearing auth data...');
+    // console.log('AuthContext: Clearing auth data...');
     try {
       await AsyncStorage.multiRemove(["authToken", "userId", "companyId", "userRole",
         "isBreakActive","breakStartTime","lastBreakType","isWorkActive","workStartTime","activeWorkReason",
@@ -102,7 +102,7 @@ export const AuthProvider = ({ children }) => {
   }
 
   const setAuthData = async (token, userId, companyId, role, userData = null, subscriptionStatusData = null) => {
-    console.log('AuthContext: Setting auth data programmatically...');
+    // console.log('AuthContext: Setting auth data programmatically...');
     await AsyncStorage.setItem('authToken', `Bearer ${token}`);
     await AsyncStorage.setItem('userId', userId.toString());
     await AsyncStorage.setItem('companyId', companyId.toString());

@@ -36,7 +36,7 @@ const CalendarModal = ({
     try {
       setLoading(true);
       const dates = await TrackingService.getUserTrackingDates(userId);
-      console.log('CalendarModal dates from API:', dates);
+      // console.log('CalendarModal dates from API:', dates);
       setTrackingDates(dates);
       
       // Create marked dates object

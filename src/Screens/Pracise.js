@@ -74,7 +74,7 @@ const requestLocationPermission = async () => {
     // For iOS, it's handled automatically
     return true;
   } catch (err) {
-    console.log("[v0] Permission request error:", err);
+    // console.log("[v0] Permission request error:", err);
     return false;
   }
 };
@@ -142,21 +142,21 @@ useEffect(() => {
 }, [fancyAlertVisible]);
   useEffect(() => {
     const loadActiveState = async () => {
-      console.log("Loading active state from AsyncStorage...")
+      // console.log("Loading active state from AsyncStorage...")
 
       // 1. Check for Active Break
       const breakActive = await AsyncStorage.getItem("isBreakActive")
       const breakStartTimeISO = await AsyncStorage.getItem("breakStartTime")
       const savedBreakType = await AsyncStorage.getItem("lastBreakType")
 
-      console.log("Break state:", { breakActive, breakStartTimeISO, savedBreakType })
+      // console.log("Break state:", { breakActive, breakStartTimeISO, savedBreakType })
 
       if (breakActive === "true" && breakStartTimeISO) {
         const startTime = new Date(breakStartTimeISO)
         const now = new Date()
         const elapsed = now.getTime() - startTime.getTime()
 
-        console.log("[v0] Break is active! Elapsed time:", elapsed, "ms")
+        // console.log("[v0] Break is active! Elapsed time:", elapsed, "ms")
 
         setIsBreakStarted(true)
         setLastBreakType(savedBreakType)
@@ -167,14 +167,14 @@ useEffect(() => {
       const workActive = await AsyncStorage.getItem("isWorkActive")
       const workStartTimeISO = await AsyncStorage.getItem("workStartTime")
 
-      console.log("[v0] Work state:", { workActive, workStartTimeISO })
+      // console.log("[v0] Work state:", { workActive, workStartTimeISO })
 
       if (workActive === "true" && workStartTimeISO) {
         const startTime = new Date(workStartTimeISO)
         const now = new Date()
         const elapsed = now.getTime() - startTime.getTime()
 
-        console.log("[v0] Work is active! Elapsed time:", elapsed, "ms")
+        // console.log("[v0] Work is active! Elapsed time:", elapsed, "ms")
 
         setIsOutForWork(true)
         setCurrentWorkElapsed(elapsed)
@@ -188,7 +188,7 @@ useEffect(() => {
   useEffect(() => {
     let t
     if (isBreakStarted) {
-      console.log("[v0] Break timer started, current elapsed:", currentBreakElapsed)
+      // console.log("[v0] Break timer started, current elapsed:", currentBreakElapsed)
       t = setInterval(() => setCurrentBreakElapsed((prev) => prev + 1000), 1000)
     }
     return () => t && clearInterval(t)
@@ -197,7 +197,7 @@ useEffect(() => {
   useEffect(() => {
     let t
     if (isOutForWork) {
-      console.log("[v0] Work timer started, current elapsed:", currentWorkElapsed)
+      // console.log("[v0] Work timer started, current elapsed:", currentWorkElapsed)
       t = setInterval(() => setCurrentWorkElapsed((prev) => prev + 1000), 1000)
     }
     return () => t && clearInterval(t)
@@ -220,7 +220,7 @@ const fetchProfileData = useCallback(async () => {
         if (!response.ok) throw new Error("Profile fetch failed")
         const data = await response.json()
         setProfileData(data)
-        console.log("profile data",data);
+        // console.log("profile data",data);
         
         if (data.photoImage) {
             let base64 = data.photoImage
@@ -297,12 +297,12 @@ useEffect(() => {
     const addressFromParams = route.params?.address
     const punchTypeFromParams = route.params?.punchType 
     
-    console.log("--- PUNCH PHOTO EFFECT RUN ---");
-    console.log("Params Received:", { capturedPhoto: !!capturedPhotoFromParams, punchType: punchTypeFromParams });
+    // console.log("--- PUNCH PHOTO EFFECT RUN ---");
+    // console.log("Params Received:", { capturedPhoto: !!capturedPhotoFromParams, punchType: punchTypeFromParams });
 
     if (capturedPhotoFromParams && punchTypeFromParams) {
         
-        console.log("--- API CALLING ---");
+        // console.log("--- API CALLING ---");
         
         const isActionPunchOut = punchTypeFromParams === "ClockedOut";
         const remarkType = punchTypeFromParams; 
@@ -320,7 +320,7 @@ useEffect(() => {
             setIsLoading(true); // START LOADER
             const startTime = Date.now()
             try {
-              console.log(`[PUNCH] Starting Attendance Log API...`);
+              // console.log(`[PUNCH] Starting Attendance Log API...`);
                 const apiSuccess = await callAttendanceLogAPI({
                     [isActionPunchOut ? "outTime" : "inTime"]: now,
                     remark: remarkType,
@@ -330,9 +330,9 @@ useEffect(() => {
                     address: addressFromParams,
                 })
 const timeAfterLog = Date.now();
-        console.log(`[PUNCH] Attendance Log API finished in: ${timeAfterLog - startTime}ms`);
+        // console.log(`[PUNCH] Attendance Log API finished in: ${timeAfterLog - startTime}ms`);
                 if (apiSuccess) {
-                    console.log("Attendance success, action was:", remarkType)
+                    // console.log("Attendance success, action was:", remarkType)
                     
                     // Await profile fetch to update all UI states from server data
                     await fetchProfileData() 

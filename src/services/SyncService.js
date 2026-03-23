@@ -18,13 +18,13 @@ export const isOnline = async () => {
 
 export const syncPendingLocations = async () => {
   if (isSyncing) {
-    console.log('SyncService: Sync already in progress, skipping');
+    // console.log('SyncService: Sync already in progress, skipping');
     return { success: true, synced: 0 };
   }
 
   const online = await isOnline();
   if (!online) {
-    console.log('SyncService: Offline, skipping sync');
+    // console.log('SyncService: Offline, skipping sync');
     return { success: false, synced: 0, reason: 'offline' };
   }
 
@@ -134,7 +134,7 @@ export const syncPendingLocations = async () => {
 export const setupSyncOnReconnect = (onSyncComplete) => {
   return NetInfo.addEventListener((state) => {
     if (state.isConnected && state.isInternetReachable !== false) {
-      console.log('SyncService: Network restored, triggering sync');
+      // console.log('SyncService: Network restored, triggering sync');
       syncPendingLocations().then((result) => {
         onSyncComplete?.(result);
       });

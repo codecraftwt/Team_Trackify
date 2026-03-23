@@ -142,7 +142,7 @@ const Home = ({ navigation, route }) => {
   useEffect(() => {
     let t
     if (isBreakStarted) {
-      console.log("[v0] Break timer started, current elapsed:", currentBreakElapsed)
+      // console.log("[v0] Break timer started, current elapsed:", currentBreakElapsed)
       t = setInterval(() => setCurrentBreakElapsed((prev) => prev + 1000), 1000)
     }
     return () => t && clearInterval(t)
@@ -151,7 +151,7 @@ const Home = ({ navigation, route }) => {
   useEffect(() => {
     let t
     if (isOutForWork) {
-      console.log("[v0] Work timer started, current elapsed:", currentWorkElapsed)
+      // console.log("[v0] Work timer started, current elapsed:", currentWorkElapsed)
       t = setInterval(() => setCurrentWorkElapsed((prev) => prev + 1000), 1000)
     }
     return () => t && clearInterval(t)
@@ -198,7 +198,7 @@ const Home = ({ navigation, route }) => {
 
       const data = await response.json()
       setProfileData(data)
-      console.log("profile data", data);
+      // console.log("profile data", data);
 
       if (data.photoImage) {
         let base64 = data.photoImage
@@ -266,7 +266,7 @@ const Home = ({ navigation, route }) => {
   ]);
 
   const loadActiveState = useCallback(async () => {
-    console.log("Loading active state from AsyncStorage and recalculating time...")
+    // console.log("Loading active state from AsyncStorage and recalculating time...")
     const now = new Date().getTime();
 
     // 1. Check for Active Break
@@ -326,7 +326,7 @@ const Home = ({ navigation, route }) => {
     // Function to run when the app state changes
     const handleAppStateChange = (nextAppState) => {
       if (nextAppState === 'active') {
-        console.log('App returned to foreground! Forcing full time recalculation.');
+        // console.log('App returned to foreground! Forcing full time recalculation.');
 
         // This single call handles:
         // 1. Recalculating working time (via fetchProfileData inside loadActiveState)
@@ -362,12 +362,12 @@ const Home = ({ navigation, route }) => {
     const addressFromParams = route.params?.address
     const punchTypeFromParams = route.params?.punchType
 
-    console.log("--- PUNCH PHOTO EFFECT RUN ---");
-    console.log("Params Received:", { capturedPhoto: !!capturedPhotoFromParams, punchType: punchTypeFromParams });
+    // console.log("--- PUNCH PHOTO EFFECT RUN ---");
+    // console.log("Params Received:", { capturedPhoto: !!capturedPhotoFromParams, punchType: punchTypeFromParams });
 
     if (capturedPhotoFromParams && punchTypeFromParams) {
       setIsLoading(true);
-      console.log("--- API CALLING ---");
+      // console.log("--- API CALLING ---");
 
       const isActionPunchOut = punchTypeFromParams === "ClockedOut";
       const remarkType = punchTypeFromParams;
@@ -377,7 +377,7 @@ const Home = ({ navigation, route }) => {
         // setIsLoading(true); // START LOADER
         const startTime = Date.now()
         try {
-          console.log(`[PUNCH] Starting Attendance Log API...`);
+          // console.log(`[PUNCH] Starting Attendance Log API...`);
           const apiSuccess = await callAttendanceLogAPI({
             [isActionPunchOut ? "outTime" : "inTime"]: now,
             remark: remarkType,
@@ -387,9 +387,9 @@ const Home = ({ navigation, route }) => {
             address: addressFromParams,
           })
           const timeAfterLog = Date.now();
-          console.log(`[PUNCH] Attendance Log API finished in: ${timeAfterLog - startTime}ms`);
+          // console.log(`[PUNCH] Attendance Log API finished in: ${timeAfterLog - startTime}ms`);
           if (apiSuccess) {
-            console.log("Attendance success, action was:", remarkType)
+            // console.log("Attendance success, action was:", remarkType)
 
             // Await profile fetch to update all UI states from server data
             await fetchProfileData()
@@ -866,8 +866,8 @@ const Home = ({ navigation, route }) => {
                   const now = new Date()
                   const startRemark = selectedBreak === "Lunch" ? "LunchBreakStart" : "TeaBreakStart"
 
-                  console.log("[v0] Starting break, saving to AsyncStorage...")
-                  console.log("[v0] Break start time:", now.toISOString())
+                  // console.log("[v0] Starting break, saving to AsyncStorage...")
+                  // console.log("[v0] Break start time:", now.toISOString())
 
                   await AsyncStorage.setItem("isBreakActive", "true")
                   await AsyncStorage.setItem("breakStartTime", now.toISOString())
@@ -922,8 +922,8 @@ const Home = ({ navigation, route }) => {
                 onPress={async () => {
                   const now = new Date()
 
-                  console.log("[v0] Starting work, saving to AsyncStorage...")
-                  console.log("[v0] Work start time:", now.toISOString())
+                  // console.log("[v0] Starting work, saving to AsyncStorage...")
+                  // console.log("[v0] Work start time:", now.toISOString())
 
                   await AsyncStorage.setItem("isWorkActive", "true")
                   await AsyncStorage.setItem("workStartTime", now.toISOString())

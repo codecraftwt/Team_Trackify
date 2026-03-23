@@ -133,7 +133,7 @@ const AdminHistory = ({ navigation, route }) => {
       if (response.didCancel) {
         console.log('User cancelled image picker');
       } else if (response.error) {
-        console.log('ImagePicker Error: ', response.error);
+        // console.log('ImagePicker Error: ', response.error);
         Alert.alert('Error', 'Failed to pick image');
       } else if (response.assets && response.assets[0]) {
         const source = { uri: response.assets[0].uri };
@@ -267,16 +267,16 @@ const AdminHistory = ({ navigation, route }) => {
         avtar: avtarFile,
       };
 
-      console.log('AddUser payload =====>', {
-        ...payload,
-        avtar: payload.avtar
-          ? {
-              uri: payload.avtar.uri,
-              type: payload.avtar.type || 'image/jpeg',
-              fileName: payload.avtar.name,
-            }
-          : null,
-      });
+      // console.log('AddUser payload =====>', {
+      //   ...payload,
+      //   avtar: payload.avtar
+      //     ? {
+      //         uri: payload.avtar.uri,
+      //         type: payload.avtar.type || 'image/jpeg',
+      //         fileName: payload.avtar.name,
+      //       }
+      //     : null,
+      // });
 
       const response = await registerUser(payload);
 

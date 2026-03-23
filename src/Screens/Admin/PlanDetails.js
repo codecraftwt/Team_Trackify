@@ -62,7 +62,7 @@ export default function PlanDetails({ route, navigation }) {
     const timer = setTimeout(() => {
       if (RazorpayCheckout && typeof RazorpayCheckout.open === 'function') {
         setRazorpayReady(true);
-        console.log('Razorpay is ready');
+        // console.log('Razorpay is ready');
       } else {
         console.warn('Razorpay not available:', {
           RazorpayCheckout,
@@ -79,7 +79,7 @@ export default function PlanDetails({ route, navigation }) {
     try {
       setLoadingSubscription(true);
       const status = await getUserSubscriptionStatus();
-      console.log('Subscription status fetched:', status);
+      // console.log('Subscription status fetched:', status);
       setSubscriptionStatus(status);
     } catch (error) {
       console.error('Error fetching subscription status:', error);
@@ -112,12 +112,12 @@ export default function PlanDetails({ route, navigation }) {
     try {
       setPurchasing(true);
       
-      console.log('Creating order for plan:', planId);
+      // console.log('Creating order for plan:', planId);
       
       // Step 1: Create order from backend
       const orderResponse = await createOrder(planId);
       
-      console.log('Order response:', orderResponse);
+      // console.log('Order response:', orderResponse);
       
       if (!orderResponse.success) {
         throw new Error(orderResponse.message || 'Failed to create order');
@@ -144,9 +144,9 @@ export default function PlanDetails({ route, navigation }) {
         }
       };
       
-      console.log('Opening Razorpay with options:', options);
+      // console.log('Opening Razorpay with options:', options);
       const razorpayResponse = await RazorpayCheckout.open(options);
-      console.log('Razorpay response:', razorpayResponse);
+      // console.log('Razorpay response:', razorpayResponse);
       
       // Step 3: Verify payment with backend
       const verifyResponse = await verifyPayment(

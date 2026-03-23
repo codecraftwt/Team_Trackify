@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const getAdminUsers = async (adminId) => {
   try {
 
-    console.log("Admin ID =====>", adminId);
+    // console.log("Admin ID =====>", adminId);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
@@ -96,12 +96,12 @@ export const getAdminUsers = async (adminId) => {
 export const getUserTrackingSummary = async (adminId, userId) => {
   try {
 
-    console.log("Admin ID passed to api =====>", adminId);
-    console.log("User ID passed to api =====>", userId);
+    // console.log("Admin ID passed to api =====>", adminId);
+    // console.log("User ID passed to api =====>", userId);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
-    console.log('Token =====>', token);
+    // console.log('Token =====>', token);
 
     if (!token) {
       return {
@@ -119,10 +119,10 @@ export const getUserTrackingSummary = async (adminId, userId) => {
       },
     });
 
-    console.log("API Status =====>", response.status);
+    // console.log("API Status =====>", response.status);
 
     const text = await response.text();
-    console.log("Raw API Response =====>", text);
+    // console.log("Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -134,11 +134,11 @@ export const getUserTrackingSummary = async (adminId, userId) => {
 
     const result = JSON.parse(text);
 
-    console.log("Parsed Result =====>", result);
+    // console.log("Parsed Result =====>", result);
 
     if (response.ok && result.success) {
 
-      console.log("User Tracking Summary Data =====>", result.data);
+      // console.log("User Tracking Summary Data =====>", result.data);
 
       return {
         success: true,
@@ -147,7 +147,7 @@ export const getUserTrackingSummary = async (adminId, userId) => {
       };
 
     } else {
-      console.log("API Error Message =====>", result.message);
+      // console.log("API Error Message =====>", result.message);
 
       return {
         success: false,
@@ -176,8 +176,8 @@ export const getUserTrackingSummary = async (adminId, userId) => {
 export const getSessionDetails = async (userId, sessionId) => {
   try {
 
-    console.log("User ID =====>", userId);
-    console.log("Session ID =====>", sessionId);
+    // console.log("User ID =====>", userId);
+    // console.log("Session ID =====>", sessionId);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
@@ -198,10 +198,10 @@ export const getSessionDetails = async (userId, sessionId) => {
       },
     });
 
-    console.log("API Status =====>", response.status);
+    // console.log("API Status =====>", response.status);
 
     const text = await response.text();
-    console.log("Raw API Response =====>", text);
+    // console.log("Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -213,11 +213,11 @@ export const getSessionDetails = async (userId, sessionId) => {
 
     const result = JSON.parse(text);
 
-    console.log("Parsed Result =====>", result);
+    // console.log("Parsed Result =====>", result);
 
     if (response.ok && result.success) {
 
-      console.log("Session Details Data =====>", result.data);
+      // console.log("Session Details Data =====>", result.data);
 
       return {
         success: true,
@@ -226,7 +226,7 @@ export const getSessionDetails = async (userId, sessionId) => {
       };
 
     } else {
-      console.log("API Error Message =====>", result.message);
+      // console.log("API Error Message =====>", result.message);
 
       return {
         success: false,
@@ -255,8 +255,8 @@ export const getSessionDetails = async (userId, sessionId) => {
 export const getUserSessions = async (userId, date = null) => {
   try {
 
-    console.log("User ID =====>", userId);
-    console.log("Date =====>", date);
+    // console.log("User ID =====>", userId);
+    // console.log("Date =====>", date);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
@@ -283,10 +283,10 @@ export const getUserSessions = async (userId, date = null) => {
       },
     });
 
-    console.log("API Status =====>", response.status);
+    // console.log("API Status =====>", response.status);
 
     const text = await response.text();
-    console.log("Raw API Response =====>", text);
+    // console.log("Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -298,11 +298,11 @@ export const getUserSessions = async (userId, date = null) => {
 
     const result = JSON.parse(text);
 
-    console.log("Parsed Result =====>", result);
+    // console.log("Parsed Result =====>", result);
 
     if (response.ok && result.success) {
 
-      console.log("User Sessions Data =====>", result.data);
+      // console.log("User Sessions Data =====>", result.data);
 
       return {
         success: true,
@@ -311,7 +311,7 @@ export const getUserSessions = async (userId, date = null) => {
       };
 
     } else {
-      console.log("API Error Message =====>", result.message);
+      // console.log("API Error Message =====>", result.message);
 
       return {
         success: false,
@@ -403,9 +403,9 @@ export const getUserSessionDates = async (userId) => {
  */
 export const getAdminAllTracks = async (adminId, startDate, endDate) => {
   try {
-    console.log("Admin ID =====>", adminId);
-    console.log("Start Date =====>", startDate);
-    console.log("End Date =====>", endDate);
+    // console.log("Admin ID =====>", adminId);
+    // console.log("Start Date =====>", startDate);
+    // console.log("End Date =====>", endDate);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
@@ -426,10 +426,10 @@ export const getAdminAllTracks = async (adminId, startDate, endDate) => {
       },
     });
 
-    console.log("API Status =====>", response.status);
+    // console.log("API Status =====>", response.status);
 
     const text = await response.text();
-    console.log("Raw API Response =====>", text);
+    // console.log("Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -441,10 +441,10 @@ export const getAdminAllTracks = async (adminId, startDate, endDate) => {
 
     const result = JSON.parse(text);
 
-    console.log("Parsed Result =====>", result);
+    // console.log("Parsed Result =====>", result);
 
     if (response.ok) {
-      console.log("Admin All Tracks Data =====>", result);
+      // console.log("Admin All Tracks Data =====>", result);
 
       return {
         success: true,
@@ -452,7 +452,7 @@ export const getAdminAllTracks = async (adminId, startDate, endDate) => {
         message: result.message || 'Admin tracks fetched successfully'
       };
     } else {
-      console.log("API Error Message =====>", result.message);
+      // console.log("API Error Message =====>", result.message);
 
       return {
         success: false,
@@ -479,11 +479,11 @@ export const getAdminAllTracks = async (adminId, startDate, endDate) => {
  */
 export const getUserStats = async (adminId) => {
   try {
-    console.log("Admin ID for user stats =====>", adminId);
+    // console.log("Admin ID for user stats =====>", adminId);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
-    console.log("Auth Token from dashboard =====>", token ? "Token exists" : "No token found");
+    // console.log("Auth Token from dashboard =====>", token ? "Token exists" : "No token found");
     
     if (!token) {
       console.error("No authentication token found");
@@ -495,7 +495,7 @@ export const getUserStats = async (adminId) => {
     }
 
     // Log token preview for debugging (first 20 chars)
-    console.log("Token preview:", token.substring(0, 20) + "...");
+    // console.log("Token preview:", token.substring(0, 20) + "...");
 
     // Ensure token is properly formatted (remove any quotes if present)
     const cleanToken = token.replace(/['"]+/g, '');
@@ -508,8 +508,8 @@ export const getUserStats = async (adminId) => {
       },
     });
 
-    console.log("User Stats API Status =====>", response.status);
-    console.log("Response Headers:", JSON.stringify(response.headers));
+    // console.log("User Stats API Status =====>", response.status);
+    // console.log("Response Headers:", JSON.stringify(response.headers));
 
     // Check if response status is 401 (Unauthorized)
     if (response.status === 401) {
@@ -527,7 +527,7 @@ export const getUserStats = async (adminId) => {
     }
 
     const text = await response.text();
-    console.log("User Stats Raw API Response =====>", text);
+    // console.log("User Stats Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -539,10 +539,10 @@ export const getUserStats = async (adminId) => {
 
     const result = JSON.parse(text);
 
-    console.log("User Stats Parsed Result =====>", result);
+    // console.log("User Stats Parsed Result =====>", result);
 
     if (response.ok) {
-      console.log("User Stats Data =====>", result);
+      // console.log("User Stats Data =====>", result);
 
       return {
         success: true,
@@ -603,8 +603,8 @@ export default {
  */
 export const updateUser = async (userId, userData) => {
   try {
-    console.log("Updating user ID =====>", userId);
-    console.log("User data =====>", userData);
+    // console.log("Updating user ID =====>", userId);
+    // console.log("User data =====>", userData);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
@@ -650,10 +650,10 @@ export const updateUser = async (userId, userData) => {
       body: formData,
     });
 
-    console.log("Update User API Status =====>", response.status);
+    // console.log("Update User API Status =====>", response.status);
 
     const text = await response.text();
-    console.log("Update User Raw API Response =====>", text);
+    // console.log("Update User Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -665,7 +665,7 @@ export const updateUser = async (userId, userData) => {
 
     const result = JSON.parse(text);
 
-    console.log("Update User Parsed Result =====>", result);
+    // console.log("Update User Parsed Result =====>", result);
 
     if (response.ok && result.user) {
       return {
@@ -700,7 +700,7 @@ export const updateUser = async (userId, userData) => {
  */
 export const deleteUser = async (userId) => {
   try {
-    console.log("Deleting user ID =====>", userId);
+    // console.log("Deleting user ID =====>", userId);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
@@ -723,10 +723,10 @@ export const deleteUser = async (userId) => {
       },
     });
 
-    console.log("Delete User API Status =====>", response.status);
+    // console.log("Delete User API Status =====>", response.status);
 
     const text = await response.text();
-    console.log("Delete User Raw API Response =====>", text);
+    // console.log("Delete User Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -738,7 +738,7 @@ export const deleteUser = async (userId) => {
 
     const result = JSON.parse(text);
 
-    console.log("Delete User Parsed Result =====>", result);
+    // console.log("Delete User Parsed Result =====>", result);
 
     if (response.ok && result.user) {
       return {
@@ -789,11 +789,11 @@ export const registerUser = async (userData) => {
         }
       : null;
 
-    console.log("Registering new user with data =====>", {
-      ...userData,
-      password: userData?.password ? '***MASKED***' : undefined,
-      avtar: avatarMeta,
-    });
+    // console.log("Registering new user with data =====>", {
+    //   ...userData,
+    //   password: userData?.password ? '***MASKED***' : undefined,
+    //   avtar: avatarMeta,
+    // });
 
     // Create FormData for multipart/form-data
     const formData = new FormData();
@@ -805,7 +805,7 @@ export const registerUser = async (userData) => {
     formData.append('role_id', String(userData.role_id));
 
     // NOTE: Logging full FormData can be noisy / non-serializable in RN.
-    console.log("RegisterUser FormData avatar meta =====>", avatarMeta);
+    // console.log("RegisterUser FormData avatar meta =====>", avatarMeta);
     
 
     // Append optional fields
@@ -823,10 +823,10 @@ export const registerUser = async (userData) => {
       body: formData,
     });
 
-    console.log("Register User API Status =====>", response.status);
+    // console.log("Register User API Status =====>", response.status);
 
     const text = await response.text();
-    console.log("Register User Raw API Response =====>", text);
+    // console.log("Register User Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -838,7 +838,7 @@ export const registerUser = async (userData) => {
 
     const result = JSON.parse(text);
 
-    console.log("Register User Parsed Result =====>", result);
+    // console.log("Register User Parsed Result =====>", result);
 
     if (response.ok && result.user) {
       return {
@@ -873,7 +873,7 @@ export const registerUser = async (userData) => {
  */
 export const getUserById = async (userId) => {
   try {
-    console.log("Get User by ID =====>", userId);
+    // console.log("Get User by ID =====>", userId);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
@@ -897,7 +897,7 @@ export const getUserById = async (userId) => {
       },
     });
 
-    console.log("Get User API Status =====>", response.status);
+    // console.log("Get User API Status =====>", response.status);
 
     // Check if response status is 401 (Unauthorized)
     if (response.status === 401) {
@@ -915,7 +915,7 @@ export const getUserById = async (userId) => {
     }
 
     const text = await response.text();
-    console.log("Get User Raw API Response =====>", text);
+    // console.log("Get User Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -927,12 +927,12 @@ export const getUserById = async (userId) => {
 
     const result = JSON.parse(text);
 
-    console.log("Get User Parsed Result =====>", result);
+    // console.log("Get User Parsed Result =====>", result);
 
     // Check if user exists (status 1 means success, status 404 means not found)
     if (response.status === 200 && result.status === 1) {
-      console.log("User Data =====>", result.user);
-      console.log("Plan Expired Status =====>", result.planExpired);
+      // console.log("User Data =====>", result.user);
+      // console.log("Plan Expired Status =====>", result.planExpired);
 
       return {
         success: true,
@@ -948,7 +948,7 @@ export const getUserById = async (userId) => {
         status: 404
       };
     } else {
-      console.log("API Error Message =====>", result.message);
+      // console.log("API Error Message =====>", result.message);
 
       return {
         success: false,
@@ -976,7 +976,7 @@ export const getUserById = async (userId) => {
  */
 export const getLastFiveTrackedUsers = async (adminId) => {
   try {
-    console.log("Get Last Five Tracked Users for Admin =====>", adminId);
+    // console.log("Get Last Five Tracked Users for Admin =====>", adminId);
 
     // Get the auth token
     const token = await AsyncStorage.getItem('authToken');
@@ -1000,7 +1000,7 @@ export const getLastFiveTrackedUsers = async (adminId) => {
       },
     });
 
-    console.log("Get Last Five Tracked Users API Status =====>", response.status);
+    // console.log("Get Last Five Tracked Users API Status =====>", response.status);
 
     // Check if response status is 401 (Unauthorized)
     if (response.status === 401) {
@@ -1018,7 +1018,7 @@ export const getLastFiveTrackedUsers = async (adminId) => {
     }
 
     const text = await response.text();
-    console.log("Get Last Five Tracked Users Raw API Response =====>", text);
+    // console.log("Get Last Five Tracked Users Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -1030,11 +1030,11 @@ export const getLastFiveTrackedUsers = async (adminId) => {
 
     const result = JSON.parse(text);
 
-    console.log("Get Last Five Tracked Users Parsed Result =====>", result);
+    // console.log("Get Last Five Tracked Users Parsed Result =====>", result);
 
     // Check if response is successful (status 200)
     if (response.status === 200) {
-      console.log("Last Five Tracked Users Data =====>", result.users);
+      // console.log("Last Five Tracked Users Data =====>", result.users);
 
       return {
         success: true,
@@ -1042,7 +1042,7 @@ export const getLastFiveTrackedUsers = async (adminId) => {
         message: result.message || 'Last five tracked users fetched successfully'
       };
     } else {
-      console.log("API Error Message =====>", result.message);
+      // console.log("API Error Message =====>", result.message);
 
       return {
         success: false,

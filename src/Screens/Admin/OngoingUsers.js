@@ -137,7 +137,7 @@ const OngoingUsers = ({ navigation }) => {
       }
 
       const result = await getActiveUsersCurrentLocations(adminId);
-      console.log("API Response:", result); // Debug log
+      // console.log("API Response:", result); // Debug log
 
       if (result.success && result.data) {
         const activeUsers = result.data.activeUsers || [];
@@ -145,7 +145,7 @@ const OngoingUsers = ({ navigation }) => {
         // Process ALL users - keep both valid and invalid location users
         const usersWithValidLocations = activeUsers.filter((user) => {
           if (!user.currentLocation) {
-            console.log(`User ${user.user?.name} has no location data`);
+            // console.log(`User ${user.user?.name} has no location data`);
             return false;
           }
           
@@ -159,16 +159,16 @@ const OngoingUsers = ({ navigation }) => {
           return isValid;
         });
 
-        console.log(`Total users: ${activeUsers.length}`);
-        console.log(`Users with valid locations: ${usersWithValidLocations.length}`);
+        // console.log(`Total users: ${activeUsers.length}`);
+        // console.log(`Users with valid locations: ${usersWithValidLocations.length}`);
         
-        if (usersWithValidLocations.length > 0) {
-          console.log("Valid user locations:", usersWithValidLocations.map(u => ({
-            name: u.user.name,
-            lat: u.currentLocation.latitude,
-            lng: u.currentLocation.longitude
-          })));
-        }
+        // if (usersWithValidLocations.length > 0) {
+        //   console.log("Valid user locations:", usersWithValidLocations.map(u => ({
+        //     name: u.user.name,
+        //     lat: u.currentLocation.latitude,
+        //     lng: u.currentLocation.longitude
+        //   })));
+        // }
         
         // Store all users - both valid and invalid
         setUsers(activeUsers);
@@ -188,7 +188,7 @@ const OngoingUsers = ({ navigation }) => {
         if (mapReady && allUsersForBounds.length > 0 && mapRef.current) {
           const bounds = calculateMapBounds(allUsersForBounds);
           if (bounds) {
-            console.log("Adjusting map to bounds:", bounds);
+            // console.log("Adjusting map to bounds:", bounds);
             mapRef.current.animateToRegion(bounds, 500);
           }
         } else if (mapReady) {
@@ -199,7 +199,7 @@ const OngoingUsers = ({ navigation }) => {
             latitudeDelta: 8,
             longitudeDelta: 8
           };
-          console.log("No users, showing default view");
+          // console.log("No users, showing default view");
           mapRef.current.animateToRegion(defaultRegion, 500);
         }
 
@@ -208,7 +208,7 @@ const OngoingUsers = ({ navigation }) => {
       }
 
     } catch (error) {
-      console.log("Location fetch error:", error);
+      // console.log("Location fetch error:", error);
     } finally {
       setLoading(false);
     }
@@ -227,7 +227,7 @@ const OngoingUsers = ({ navigation }) => {
     if (users.length > 0 && mapRef.current) {
       const bounds = calculateMapBounds(users);
       if (bounds) {
-        console.log("Initial map adjustment to bounds:", bounds);
+        // console.log("Initial map adjustment to bounds:", bounds);
         mapRef.current.animateToRegion(bounds, 500);
       }
     }
