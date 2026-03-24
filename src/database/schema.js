@@ -6,7 +6,7 @@ import { appSchema, tableSchema } from '@nozbe/watermelondb';
  * - location_points: Stores location data for offline-first tracking
  */
 export default appSchema({
-  version: 2,
+  version: 4,
   tables: [
     tableSchema({
       name: 'tracking_sessions',
@@ -17,6 +17,8 @@ export default appSchema({
         { name: 'end_time', type: 'number', isOptional: true },
         { name: 'status', type: 'string' }, // 'active' | 'ended'
         { name: 'synced', type: 'boolean' },
+        { name: 'punch_in_photo_uri', type: 'string', isOptional: true },
+        { name: 'punch_out_photo_uri', type: 'string', isOptional: true },
         { name: 'created_at', type: 'number' },
       ],
     }),

@@ -14,6 +14,8 @@ export default class TrackingSession extends Model {
   @field('end_time') endTime;
   @field('status') status;
   @field('synced') synced;
+  @field('punch_in_photo_uri') punchInPhotoUri;
+  @field('punch_out_photo_uri') punchOutPhotoUri;
   @readonly @date('created_at') createdAt;
 
   get locationPoints() {

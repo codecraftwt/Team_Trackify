@@ -388,6 +388,7 @@ import {
   markLocationSynced,
   endLocalSession,
   generateLocalSessionId,
+  updateSessionPunchOutPhoto,
 } from './OfflineLocationStore';
 import { copyPhotoToOfflineStorage } from '../utils/photoStorage';
 
@@ -426,6 +427,24 @@ export const startSession = async (photoFile) => {
   }
 };
 
+// Create a session on server without requiring a photo
+// This is used when syncing offline sessions that already have photos stored locally
+export const createSessionDirectly = async () => {
+  try {
+    // Create session with minimal data - the punch-in photo will be uploaded with location points
+    const response = await Api.post(`${TRACKING_BASE}/AddTrackingSession`, {}, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 30000,
+      validateStatus: (status) => status >= 200 && status < 300,
+    });
+    const data = response?.data;
+    return data;
+  } catch (error) {
+    console.error('Failed to create session directly:', error);
+    throw error;
+  }
+};
+
 export const startSessionOfflineFirst = async (photoFile) => {
   try {
     if (!photoFile?.uri) {
@@ -441,14 +460,16 @@ export const startSessionOfflineFirst = async (photoFile) => {
     const sessionId = data?.sessionId;
     const startTime = data?.startTime ? new Date(data.startTime).getTime() : Date.now();
     if (sessionId) {
-      await createLocalSession(sessionId, startTime, sessionId);
+      await createLocalSession(sessionId, startTime, sessionId, photoFile.uri);
     }
     return data;
   } catch (error) {
     console.warn('Start session failed (offline?), creating local session:', error?.message);
     const localId = generateLocalSessionId();
     const startTime = Date.now();
-    await createLocalSession(localId, startTime, null);
+    // Store the punch-in photo URI for later sync
+    const punchInPhotoUri = photoFile?.uri || null;
+    await createLocalSession(localId, startTime, null, punchInPhotoUri);
     return { sessionId: localId, startTime: new Date(startTime).toISOString(), isOffline: true };
   }
 };
@@ -624,6 +645,16 @@ export const addLocationWithPhotoOfflineFirst = async (sessionId, locationData, 
 
 export const endSessionOfflineFirst = async (sessionId, photoFile) => {
   const endTime = Date.now();
+  
+  // Save punch-out photo if provided
+  if (photoFile?.uri) {
+    try {
+      await updateSessionPunchOutPhoto(sessionId, photoFile.uri);
+    } catch (err) {
+      console.warn('Failed to save punch-out photo:', err?.message);
+    }
+  }
+  
   await endLocalSession(sessionId, endTime);
   if (isLocalSessionId(sessionId)) {
     return { success: true, storedOffline: true };
@@ -639,9 +670,8 @@ export const endSessionOfflineFirst = async (sessionId, photoFile) => {
 
 export const endSession = async (sessionId, photoFile) => {
   try {
-    if (!photoFile?.uri) {
-      throw new Error('Photo is required to end tracking');
-    }
+    // Allow ending session without photo for offline sync scenarios
+    // The server may accept this or reject - we'll handle the error
     const formData = buildPhotoFormData(photoFile);
     const response = await Api.put(`${TRACKING_BASE}/${sessionId}/end`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

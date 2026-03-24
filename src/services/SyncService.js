@@ -7,6 +7,8 @@ import {
   markLocationSynced,
   updateSessionServerId,
   endLocalSession,
+  getSessionByLocalId,
+  getAllLocationsForSession,
 } from './OfflineLocationStore';
 
 let isSyncing = false;
@@ -33,8 +35,17 @@ export const syncPendingLocations = async () => {
 
   try {
     const sessionsWithUnsynced = await getAllSessionsWithUnsyncedLocations();
+    console.log('[SyncService] Found sessions with unsynced locations:', sessionsWithUnsynced.length);
 
     for (const { session, unsyncedCount } of sessionsWithUnsynced) {
+      console.log('[SyncService] ===========================================');
+      console.log('[SyncService] Processing session:', session.localSessionId);
+      console.log('[SyncService] - unsyncedCount:', unsyncedCount);
+      console.log('[SyncService] - serverSessionId:', session.serverSessionId);
+      console.log('[SyncService] - status:', session.status);
+      console.log('[SyncService] - synced:', session.synced);
+      console.log('[SyncService] ===========================================');
+      
       if (unsyncedCount === 0 && session.synced) continue;
 
       let serverSessionId = session.serverSessionId;
@@ -43,11 +54,92 @@ export const syncPendingLocations = async () => {
       // purely offline "local_*" sessions), create it now and link
       // it to the local session so all buffered points can be synced.
       if (!serverSessionId) {
+        // For offline sessions, get the punch-in photo from session record
         try {
-          const res = await TrackingService.startSession();
+          let photoFile = null;
+          
+          // Get punch-in photo from session record
+          const punchInPhotoUri = session.punchInPhotoUri;
+          console.log('[SyncService] Punch-in photo URI from session:', punchInPhotoUri);
+          
+          if (punchInPhotoUri) {
+            const photoPath = punchInPhotoUri.startsWith('file://') 
+              ? punchInPhotoUri.replace('file://', '') 
+              : punchInPhotoUri;
+            try {
+              const photoFileExists = await RNFS.exists(photoPath);
+              if (photoFileExists) {
+                photoFile = {
+                  uri: punchInPhotoUri.startsWith('file://') ? punchInPhotoUri : `file://${photoPath}`,
+                  fileName: punchInPhotoUri.split('/').pop() || `photo_${session.startTime}.jpg`,
+                  type: 'image/jpeg',
+                };
+                console.log('[SyncService] Found punch-in photo:', photoFile.fileName);
+              }
+            } catch {
+              console.log('[SyncService] Photo file does not exist:', photoPath);
+            }
+          } else {
+            console.log('[SyncService] No punch-in photo in session, checking location points...');
+            // Fallback: check location points for photo
+            const allLocations = await getAllLocationsForSession(session.localSessionId);
+            const startPoint = allLocations.find(p => p.source === 'start' && p.photoUri) 
+              || (allLocations.length > 0 ? allLocations[0] : null);
+            if (startPoint?.photoUri) {
+              const photoPath = startPoint.photoUri.startsWith('file://') 
+                ? startPoint.photoUri.replace('file://', '') 
+                : startPoint.photoUri;
+              try {
+                const photoFileExists = await RNFS.exists(photoPath);
+                if (photoFileExists) {
+                  photoFile = {
+                    uri: startPoint.photoUri.startsWith('file://') ? startPoint.photoUri : `file://${photoPath}`,
+                    fileName: startPoint.photoUri.split('/').pop() || `photo_${startPoint.timestamp}.jpg`,
+                    type: 'image/jpeg',
+                  };
+                  console.log('[SyncService] Found punch-in photo from location:', photoFile.fileName);
+                }
+              } catch {}
+            }
+          }
+          
+          // Try to create session with the punch-in photo
+          let res;
+          if (photoFile) {
+            try {
+              console.log('[SyncService] Creating session with punch-in photo...');
+              res = await TrackingService.startSession(photoFile);
+              console.log('[SyncService] Session created with photo, result:', res);
+            } catch (photoErr) {
+              console.log('[SyncService] Could not create session with photo:', photoErr?.message);
+              // Try direct creation as fallback
+              try {
+                res = await TrackingService.createSessionDirectly();
+              } catch (directErr) {
+                console.log('[SyncService] Direct creation also failed:', directErr?.message);
+                throw directErr;
+              }
+            }
+          } else {
+            // No photo available, try direct creation
+            console.log('[SyncService] No photo available, trying createSessionDirectly...');
+            try {
+              res = await TrackingService.createSessionDirectly();
+            } catch (directErr) {
+              console.log('[SyncService] Direct creation failed:', directErr?.message);
+              throw directErr;
+            }
+          }
+          
           serverSessionId = res?.sessionId;
+          console.log('[SyncService] Created server session:', serverSessionId);
+          
           if (serverSessionId) {
+            console.log('[SyncService] Linking local session to server session...');
             await updateSessionServerId(session.localSessionId, serverSessionId);
+            console.log('[SyncService] Session linked successfully');
+          } else {
+            console.warn('[SyncService] No sessionId returned from server!');
           }
         } catch (err) {
           console.warn('SyncService: Failed to create session on server:', err?.message);
@@ -55,9 +147,13 @@ export const syncPendingLocations = async () => {
         }
       }
 
-      if (!serverSessionId) continue;
+      if (!serverSessionId) {
+        console.warn('[SyncService] No serverSessionId, skipping session:', session.localSessionId);
+        continue;
+      }
 
       const unsyncedPoints = await getUnsyncedLocations(session.localSessionId);
+      console.log('[SyncService] Found unsynced points:', unsyncedPoints.length);
 
       for (const point of unsyncedPoints) {
         try {
@@ -106,6 +202,7 @@ export const syncPendingLocations = async () => {
           if (result.success) {
             await markLocationSynced(point.id);
             totalSynced++;
+            console.log('[SyncService] Synced point:', point.id);
           }
         } catch (err) {
           console.warn('SyncService: Failed to upload location:', err?.message);
@@ -113,15 +210,41 @@ export const syncPendingLocations = async () => {
         }
       }
 
+      // End the session on server if it was ended locally
       if (session.status === 'ended') {
+        console.log('[SyncService] Session is ended locally, ending on server...');
+        
+        // Try to get punch-out photo from session
+        let punchOutPhoto = null;
+        if (session.punchOutPhotoUri) {
+          const photoPath = session.punchOutPhotoUri.startsWith('file://') 
+            ? session.punchOutPhotoUri.replace('file://', '') 
+            : session.punchOutPhotoUri;
+          try {
+            const photoFileExists = await RNFS.exists(photoPath);
+            if (photoFileExists) {
+              punchOutPhoto = {
+                uri: session.punchOutPhotoUri.startsWith('file://') ? session.punchOutPhotoUri : `file://${photoPath}`,
+                fileName: session.punchOutPhotoUri.split('/').pop() || `punchout_${session.endTime}.jpg`,
+                type: 'image/jpeg',
+              };
+              console.log('[SyncService] Found punch-out photo:', punchOutPhoto.fileName);
+            }
+          } catch (err) {
+            console.log('[SyncService] Punch-out photo not found:', err?.message);
+          }
+        }
+        
         try {
-          await TrackingService.endSession(serverSessionId);
+          await TrackingService.endSession(serverSessionId, punchOutPhoto);
+          console.log('[SyncService] Ended session on server:', serverSessionId);
         } catch (err) {
           console.warn('SyncService: Failed to end session:', err?.message);
         }
       }
     }
 
+    console.log('[SyncService] Total synced:', totalSynced);
     return { success: true, synced: totalSynced };
   } catch (error) {
     console.error('SyncService: Sync error:', error);

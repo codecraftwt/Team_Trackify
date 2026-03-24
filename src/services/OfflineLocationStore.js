@@ -8,7 +8,7 @@ export const generateLocalSessionId = () => {
   return `local_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 };
 
-export const createLocalSession = async (localSessionId, startTime, serverSessionId = null) => {
+export const createLocalSession = async (localSessionId, startTime, serverSessionId = null, punchInPhotoUri = null) => {
   await database.write(async () => {
     await sessionsCollection().create((session) => {
       session.localSessionId = localSessionId;
@@ -17,6 +17,8 @@ export const createLocalSession = async (localSessionId, startTime, serverSessio
       session.endTime = null;
       session.status = 'active';
       session.synced = !!serverSessionId;
+      session.punchInPhotoUri = punchInPhotoUri;
+      session.punchOutPhotoUri = null;
     });
   });
   return localSessionId;
@@ -134,6 +136,32 @@ export const updateSessionServerId = async (localSessionId, serverSessionId) => 
   });
 };
 
+export const updateSessionPunchInPhoto = async (localSessionId, punchInPhotoUri) => {
+  await database.write(async () => {
+    const sessions = await sessionsCollection()
+      .query(Q.where('local_session_id', localSessionId))
+      .fetch();
+    if (sessions.length > 0) {
+      await sessions[0].update((s) => {
+        s.punchInPhotoUri = punchInPhotoUri;
+      });
+    }
+  });
+};
+
+export const updateSessionPunchOutPhoto = async (localSessionId, punchOutPhotoUri) => {
+  await database.write(async () => {
+    const sessions = await sessionsCollection()
+      .query(Q.where('local_session_id', localSessionId))
+      .fetch();
+    if (sessions.length > 0) {
+      await sessions[0].update((s) => {
+        s.punchOutPhotoUri = punchOutPhotoUri;
+      });
+    }
+  });
+};
+
 export const endLocalSession = async (localSessionId, endTime) => {
   await database.write(async () => {
     const sessions = await sessionsCollection()
@@ -152,7 +180,21 @@ export const getSessionByLocalId = async (localSessionId) => {
   const sessions = await sessionsCollection()
     .query(Q.where('local_session_id', localSessionId))
     .fetch();
-  return sessions[0] || null;
+  if (sessions.length > 0) {
+    const s = sessions[0];
+    return {
+      id: s.id,
+      localSessionId: s.localSessionId,
+      serverSessionId: s.serverSessionId,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      status: s.status,
+      synced: s.synced,
+      punchInPhotoUri: s.punchInPhotoUri,
+      punchOutPhotoUri: s.punchOutPhotoUri,
+    };
+  }
+  return null;
 };
 
 export const getSessionByServerId = async (serverSessionId) => {
