@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,12 +25,13 @@ import { getAdminUsers, updateUser, deleteUser, registerUser } from '../../confi
 import { isSubscriptionExpired, getSubscriptionMessage } from '../../utils/subscriptionUtils';
 
 const AdminHistory = ({ navigation, route }) => {
+  const { userId } = useAuth();
   const { subscriptionStatus: authSubscriptionStatus, userRole } = useAuth();
   // Get subscription status from route params (passed from login)
   const routeSubscriptionStatus = route?.params?.subscriptionStatus;
   // Use route params first, then fall back to auth context
   const subscriptionStatus = routeSubscriptionStatus || authSubscriptionStatus;
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('active');
   const [users, setUsers] = useState([]);
@@ -38,15 +39,15 @@ const AdminHistory = ({ navigation, route }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // Modal states
   const [addUserModalVisible, setAddUserModalVisible] = useState(false);
   const [editUserModalVisible, setEditUserModalVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Selected user for editing
   const [selectedUser, setSelectedUser] = useState(null);
-  
+
   // Add user form state
   const [newUserData, setNewUserData] = useState({
     name: '',
@@ -63,7 +64,7 @@ const AdminHistory = ({ navigation, route }) => {
   const checkSubscription = async () => {
     // Try to get subscription status from multiple sources
     let currentSubscriptionStatus = subscriptionStatus;
-    
+
     if (!currentSubscriptionStatus) {
       try {
         const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
@@ -74,7 +75,7 @@ const AdminHistory = ({ navigation, route }) => {
         console.error('Error loading subscription status:', error);
       }
     }
-    
+
     if (userRole === 'Admin' && isSubscriptionExpired(currentSubscriptionStatus)) {
       Alert.alert(
         'Subscription Expired',
@@ -100,7 +101,7 @@ const AdminHistory = ({ navigation, route }) => {
   useEffect(() => {
     checkSubscription();
   }, [subscriptionStatus]);
-  
+
   // Edit user form state
   const [editUserData, setEditUserData] = useState({
     name: '',
@@ -112,8 +113,7 @@ const AdminHistory = ({ navigation, route }) => {
     isActive: true,
     status: 1,
   });
-   
-  const { userId } = useAuth();
+
 
   // Function to pick image from gallery or camera
   const pickImage = (type = 'gallery') => {
@@ -125,8 +125,8 @@ const AdminHistory = ({ navigation, route }) => {
       maxHeight: 800,
     };
 
-    const imagePickerMethod = type === 'camera' 
-      ? ImagePicker.launchCamera 
+    const imagePickerMethod = type === 'camera'
+      ? ImagePicker.launchCamera
       : ImagePicker.launchImageLibrary;
 
     imagePickerMethod(options, (response) => {
@@ -229,31 +229,107 @@ const AdminHistory = ({ navigation, route }) => {
   };
 
   // Handle add user submit with avatar
+  // const handleAddUserSubmit = async () => {
+  //   // Validate required fields
+  //   if (!newUserData.name.trim()) {
+  //     Alert.alert('Validation Error', 'Please enter user name');
+  //     return;
+  //   }
+  //   if (!newUserData.email.trim()) {
+  //     Alert.alert('Validation Error', 'Please enter email');
+  //     return;
+  //   }
+  //   if (!newUserData.password.trim()) {
+  //     Alert.alert('Validation Error', 'Please enter password');
+  //     return;
+  //   }
+
+  //   setIsSubmitting(true);
+  //   try {
+  //     // Register endpoint expects `avtar` for the profile image file
+  //     const avtarFile = newUserData.avatar
+  //       ? {
+  //           uri: newUserData.avatar.uri,
+  //           type: newUserData.avatar.type || 'image/jpeg',
+  //           name:
+  //             newUserData.avatar.fileName || `avatar_${Date.now()}.jpg`,
+  //         }
+  //       : null;
+
+  //     const payload = {
+  //       name: newUserData.name,
+  //       email: newUserData.email,
+  //       password: newUserData.password,
+  //       mobile_no: newUserData.mobile_no,
+  //       address: newUserData.address,
+  //       role_id: newUserData.role_id,
+  //       createdby: userId,
+  //       avtar: avtarFile,
+  //     };
+
+  //     const response = await registerUser(payload);
+
+  //     if (response.success) {
+  //       Alert.alert('Success', 'User registered successfully');
+  //       setAddUserModalVisible(false);
+  //       fetchUsers(true); // Refresh the list
+  //     } else {
+  //       // Backend may create the user record first, then fail (e.g., email/OTP timeout).
+  //       // Refresh anyway so the UI matches DB state.
+  //       if (response?.message?.toLowerCase().includes('timeout')) {
+  //         fetchUsers(true);
+  //         Alert.alert(
+  //           'Request timed out',
+  //           `${response.message || 'Connection timeout'}. The user may have been created. Please refresh to confirm.`,
+  //         );
+  //       } else {
+  //         Alert.alert('Error', response.message || 'Failed to register user');
+  //       }
+  //     }
+  //   } catch (err) {
+  //     Alert.alert('Error', 'Something went wrong while registering user');
+  //     console.error('Error registering user:', err);
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // };
+
+  // Updated handleAddUserSubmit with direct API validation
   const handleAddUserSubmit = async () => {
-    // Validate required fields
+    // Clear previous errors
+    setFieldErrors({
+      name: '',
+      email: '',
+      password: '',
+      mobile_no: '',
+      address: '',
+    });
+
+    // Basic frontend validation to prevent unnecessary API calls
     if (!newUserData.name.trim()) {
-      Alert.alert('Validation Error', 'Please enter user name');
+      setFieldErrors(prev => ({ ...prev, name: 'Name is required' }));
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     if (!newUserData.email.trim()) {
-      Alert.alert('Validation Error', 'Please enter email');
+      setFieldErrors(prev => ({ ...prev, email: 'Email is required' }));
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
     if (!newUserData.password.trim()) {
-      Alert.alert('Validation Error', 'Please enter password');
+      setFieldErrors(prev => ({ ...prev, password: 'Password is required' }));
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Register endpoint expects `avtar` for the profile image file
       const avtarFile = newUserData.avatar
         ? {
-            uri: newUserData.avatar.uri,
-            type: newUserData.avatar.type || 'image/jpeg',
-            name:
-              newUserData.avatar.fileName || `avatar_${Date.now()}.jpg`,
-          }
+          uri: newUserData.avatar.uri,
+          type: newUserData.avatar.type || 'image/jpeg',
+          name: newUserData.avatar.fileName || `avatar_${Date.now()}.jpg`,
+        }
         : null;
 
       const payload = {
@@ -267,32 +343,39 @@ const AdminHistory = ({ navigation, route }) => {
         avtar: avtarFile,
       };
 
-      // console.log('AddUser payload =====>', {
-      //   ...payload,
-      //   avtar: payload.avtar
-      //     ? {
-      //         uri: payload.avtar.uri,
-      //         type: payload.avtar.type || 'image/jpeg',
-      //         fileName: payload.avtar.name,
-      //       }
-      //     : null,
-      // });
-
       const response = await registerUser(payload);
 
       if (response.success) {
         Alert.alert('Success', 'User registered successfully');
         setAddUserModalVisible(false);
-        fetchUsers(true); // Refresh the list
+        fetchUsers(true);
+        // Reset form
+        setNewUserData({
+          name: '',
+          email: '',
+          password: '',
+          mobile_no: '',
+          address: '',
+          role_id: 0,
+          avatar: null,
+          avatarUri: null,
+        });
+        setFieldErrors({
+          name: '',
+          email: '',
+          password: '',
+          mobile_no: '',
+          address: '',
+        });
       } else {
-        // Backend may create the user record first, then fail (e.g., email/OTP timeout).
-        // Refresh anyway so the UI matches DB state.
-        if (response?.message?.toLowerCase().includes('timeout')) {
-          fetchUsers(true);
-          Alert.alert(
-            'Request timed out',
-            `${response.message || 'Connection timeout'}. The user may have been created. Please refresh to confirm.`,
-          );
+        // Check if there are validation errors from backend
+        if (response.errors && Array.isArray(response.errors) && response.errors.length > 0) {
+          // Map backend errors to specific fields
+          const mappedErrors = mapValidationErrors(response.errors);
+          setFieldErrors(mappedErrors);
+
+          // Scroll to top to show errors
+          scrollViewRef.current?.scrollTo({ y: 0, animated: true });
         } else {
           Alert.alert('Error', response.message || 'Failed to register user');
         }
@@ -304,6 +387,52 @@ const AdminHistory = ({ navigation, route }) => {
       setIsSubmitting(false);
     }
   };
+  const scrollViewRef = useRef(null);
+
+  const [fieldErrors, setFieldErrors] = useState({
+    name: '',
+    email: '',
+    password: '',
+    mobile_no: '',
+    address: '',
+  });
+
+  // Function to map backend validation errors to specific fields
+  const mapValidationErrors = (errorsArray) => {
+    const mappedErrors = {
+      name: '',
+      email: '',
+      password: '',
+      mobile_no: '',
+      address: '',
+    };
+
+    if (!errorsArray || !Array.isArray(errorsArray)) {
+      return mappedErrors;
+    }
+
+    errorsArray.forEach(error => {
+      // Map error messages to fields based on keywords
+      if (error.toLowerCase().includes('name')) {
+        mappedErrors.name = error;
+      }
+      else if (error.toLowerCase().includes('email')) {
+        mappedErrors.email = error;
+      }
+      else if (error.toLowerCase().includes('password')) {
+        mappedErrors.password = error;
+      }
+      else if (error.toLowerCase().includes('mobile')) {
+        mappedErrors.mobile_no = error;
+      }
+      else if (error.toLowerCase().includes('address')) {
+        mappedErrors.address = error;
+      }
+    });
+
+    return mappedErrors;
+  };
+
 
   // Filter users based on search and active tab
   useEffect(() => {
@@ -319,7 +448,7 @@ const AdminHistory = ({ navigation, route }) => {
     // Filter by search
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(user => 
+      result = result.filter(user =>
         user.name?.toLowerCase().includes(query) ||
         user.email?.toLowerCase().includes(query) ||
         user.mobile_no?.includes(query)
@@ -428,13 +557,13 @@ const AdminHistory = ({ navigation, route }) => {
       `Are you sure you want to delete ${user.name}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
+        {
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
               const response = await deleteUser(user.id);
-              
+
               if (response.success) {
                 Alert.alert('Success', 'User deleted successfully');
                 fetchUsers(true); // Refresh the list
@@ -453,11 +582,11 @@ const AdminHistory = ({ navigation, route }) => {
 
   // Render user item
   const renderUserItem = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.userItem}
       onPress={() => {
-        navigation.navigate('UserTrackingHistory', { 
-          userId: item.id, 
+        navigation.navigate('UserTrackingHistory', {
+          userId: item.id,
           userName: item.name,
           adminId: userId
         });
@@ -473,20 +602,20 @@ const AdminHistory = ({ navigation, route }) => {
           </View>
         )}
       </View>
-      
+
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.name}</Text>
         <Text style={styles.userEmail}>{item.email}</Text>
       </View>
 
       <View style={styles.actionContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleEditUser(item)}
         >
           <Icon2 name="create-outline" size={20} color="#4CAF50" />
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleDeleteUser(item)}
         >
@@ -504,7 +633,7 @@ const AdminHistory = ({ navigation, route }) => {
         {error ? error : `No ${activeTab} users found`}
       </Text>
       {error && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.retryButton}
           onPress={() => fetchUsers(true)}
         >
@@ -519,7 +648,7 @@ const AdminHistory = ({ navigation, route }) => {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
-        
+
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Users</Text>
@@ -537,7 +666,7 @@ const AdminHistory = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>History</Text>
@@ -562,8 +691,8 @@ const AdminHistory = ({ navigation, route }) => {
               </TouchableOpacity>
             )}
           </View>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.addUserButton}
             onPress={handleAddUser}
           >
@@ -616,7 +745,7 @@ const AdminHistory = ({ navigation, route }) => {
         transparent={true}
         onRequestClose={() => setAddUserModalVisible(false)}
       >
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
@@ -627,8 +756,123 @@ const AdminHistory = ({ navigation, route }) => {
                 <Icon name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
-            
-            <ScrollView style={styles.modalContent}>
+
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Name Field */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Name *</Text>
+                <TextInput
+                  style={[styles.input, fieldErrors.name ? styles.inputError : null]}
+                  placeholder="Enter name"
+                  placeholderTextColor="#999"
+                  value={newUserData.name}
+                  onChangeText={(text) => {
+                    setNewUserData({ ...newUserData, name: text });
+                    // Clear error when user starts typing
+                    if (fieldErrors.name) {
+                      setFieldErrors(prev => ({ ...prev, name: '' }));
+                    }
+                  }}
+                />
+                {fieldErrors.name ? (
+                  <Text style={styles.errorText}>{fieldErrors.name}</Text>
+                ) : null}
+              </View>
+
+              {/* Email Field */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email *</Text>
+                <TextInput
+                  style={[styles.input, fieldErrors.email ? styles.inputError : null]}
+                  placeholder="Enter email"
+                  placeholderTextColor="#999"
+                  value={newUserData.email}
+                  onChangeText={(text) => {
+                    setNewUserData({ ...newUserData, email: text });
+                    if (fieldErrors.email) {
+                      setFieldErrors(prev => ({ ...prev, email: '' }));
+                    }
+                  }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                {fieldErrors.email ? (
+                  <Text style={styles.errorText}>{fieldErrors.email}</Text>
+                ) : null}
+              </View>
+
+              {/* Password Field */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Password *</Text>
+                <TextInput
+                  style={[styles.input, fieldErrors.password ? styles.inputError : null]}
+                  placeholder="Enter password"
+                  placeholderTextColor="#999"
+                  value={newUserData.password}
+                  onChangeText={(text) => {
+                    setNewUserData({ ...newUserData, password: text });
+                    if (fieldErrors.password) {
+                      setFieldErrors(prev => ({ ...prev, password: '' }));
+                    }
+                  }}
+                  secureTextEntry
+                />
+                {fieldErrors.password ? (
+                  <Text style={styles.errorText}>{fieldErrors.password}</Text>
+                ) : null}
+              </View>
+
+              {/* Mobile Number Field */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Mobile Number {userId ? '*' : '(Optional)'}</Text>
+                <TextInput
+                  style={[styles.input, fieldErrors.mobile_no ? styles.inputError : null]}
+                  placeholder="Enter mobile number"
+                  placeholderTextColor="#999"
+                  value={newUserData.mobile_no}
+                  onChangeText={(text) => {
+                    setNewUserData({ ...newUserData, mobile_no: text });
+                    if (fieldErrors.mobile_no) {
+                      setFieldErrors(prev => ({ ...prev, mobile_no: '' }));
+                    }
+                  }}
+                  keyboardType="phone-pad"
+                />
+                {fieldErrors.mobile_no ? (
+                  <Text style={styles.errorText}>{fieldErrors.mobile_no}</Text>
+                ) : null}
+              </View>
+
+              {/* Address Field */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Address (Optional)</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    styles.textArea,
+                    fieldErrors.address ? styles.inputError : null
+                  ]}
+                  placeholder="Enter address"
+                  placeholderTextColor="#999"
+                  value={newUserData.address}
+                  onChangeText={(text) => {
+                    setNewUserData({ ...newUserData, address: text });
+                    if (fieldErrors.address) {
+                      setFieldErrors(prev => ({ ...prev, address: '' }));
+                    }
+                  }}
+                  multiline
+                  numberOfLines={3}
+                />
+                {fieldErrors.address ? (
+                  <Text style={styles.errorText}>{fieldErrors.address}</Text>
+                ) : null}
+              </View>
+
               {/* Avatar Upload Section */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Avatar (Optional)</Text>
@@ -642,14 +886,14 @@ const AdminHistory = ({ navigation, route }) => {
                     </View>
                   ) : (
                     <View style={styles.avatarUploadButtons}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.uploadButton}
                         onPress={() => pickImage('gallery')}
                       >
                         <Icon2 name="images-outline" size={24} color="#3088C7" />
                         <Text style={styles.uploadButtonText}>Gallery</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.uploadButton}
                         onPress={() => pickImage('camera')}
                       >
@@ -660,107 +904,22 @@ const AdminHistory = ({ navigation, route }) => {
                   )}
                 </View>
               </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Name *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter name"
-                  placeholderTextColor="#999"
-                  value={newUserData.name}
-                  onChangeText={(text) => setNewUserData({...newUserData, name: text})}
-                />
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter email"
-                  placeholderTextColor="#999"
-                  value={newUserData.email}
-                  onChangeText={(text) => setNewUserData({...newUserData, email: text})}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Password *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter password"
-                  placeholderTextColor="#999"
-                  value={newUserData.password}
-                  onChangeText={(text) => setNewUserData({...newUserData, password: text})}
-                  secureTextEntry
-                />
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Mobile Number</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter mobile number"
-                  placeholderTextColor="#999"
-                  value={newUserData.mobile_no}
-                  onChangeText={(text) => setNewUserData({...newUserData, mobile_no: text})}
-                  keyboardType="phone-pad"
-                />
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Address</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Enter address"
-                  placeholderTextColor="#999"
-                  value={newUserData.address}
-                  onChangeText={(text) => setNewUserData({...newUserData, address: text})}
-                  multiline
-                  numberOfLines={3}
-                />
-              </View>
-              
-              {/* <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Role</Text>
-                <View style={styles.roleContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleButton,
-                      newUserData.role_id === 0 && styles.roleButtonActive
-                    ]}
-                    onPress={() => setNewUserData({...newUserData, role_id: 0})}
-                  >
-                    <Text style={[
-                      styles.roleButtonText,
-                      newUserData.role_id === 0 && styles.roleButtonTextActive
-                    ]}>
-                      User
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.roleButton,
-                      newUserData.role_id === 1 && styles.roleButtonActive
-                    ]}
-                    onPress={() => setNewUserData({...newUserData, role_id: 1})}
-                  >
-                    <Text style={[
-                      styles.roleButtonText,
-                      newUserData.role_id === 1 && styles.roleButtonTextActive
-                    ]}>
-                      Admin
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View> */}
             </ScrollView>
-            
+
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setAddUserModalVisible(false)}
+                onPress={() => {
+                  setAddUserModalVisible(false);
+                  // Clear errors when closing modal
+                  setFieldErrors({
+                    name: '',
+                    email: '',
+                    password: '',
+                    mobile_no: '',
+                    address: '',
+                  });
+                }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -787,7 +946,7 @@ const AdminHistory = ({ navigation, route }) => {
         transparent={true}
         onRequestClose={() => setEditUserModalVisible(false)}
       >
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
         >
@@ -798,7 +957,7 @@ const AdminHistory = ({ navigation, route }) => {
                 <Icon name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
-            
+
             <ScrollView style={styles.modalContent}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Name *</Text>
@@ -807,10 +966,10 @@ const AdminHistory = ({ navigation, route }) => {
                   placeholder="Enter name"
                   placeholderTextColor="#999"
                   value={editUserData.name}
-                  onChangeText={(text) => setEditUserData({...editUserData, name: text})}
+                  onChangeText={(text) => setEditUserData({ ...editUserData, name: text })}
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Email *</Text>
                 <TextInput
@@ -818,12 +977,12 @@ const AdminHistory = ({ navigation, route }) => {
                   placeholder="Enter email"
                   placeholderTextColor="#999"
                   value={editUserData.email}
-                  onChangeText={(text) => setEditUserData({...editUserData, email: text})}
+                  onChangeText={(text) => setEditUserData({ ...editUserData, email: text })}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>New Password (leave blank to keep current)</Text>
                 <TextInput
@@ -831,11 +990,11 @@ const AdminHistory = ({ navigation, route }) => {
                   placeholder="Enter new password"
                   placeholderTextColor="#999"
                   value={editUserData.password}
-                  onChangeText={(text) => setEditUserData({...editUserData, password: text})}
+                  onChangeText={(text) => setEditUserData({ ...editUserData, password: text })}
                   secureTextEntry
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Mobile Number</Text>
                 <TextInput
@@ -843,11 +1002,11 @@ const AdminHistory = ({ navigation, route }) => {
                   placeholder="Enter mobile number"
                   placeholderTextColor="#999"
                   value={editUserData.mobile_no}
-                  onChangeText={(text) => setEditUserData({...editUserData, mobile_no: text})}
+                  onChangeText={(text) => setEditUserData({ ...editUserData, mobile_no: text })}
                   keyboardType="phone-pad"
                 />
               </View>
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Address</Text>
                 <TextInput
@@ -855,12 +1014,12 @@ const AdminHistory = ({ navigation, route }) => {
                   placeholder="Enter address"
                   placeholderTextColor="#999"
                   value={editUserData.address}
-                  onChangeText={(text) => setEditUserData({...editUserData, address: text})}
+                  onChangeText={(text) => setEditUserData({ ...editUserData, address: text })}
                   multiline
                   numberOfLines={3}
                 />
               </View>
-              
+
               {/* <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Role</Text>
                 <View style={styles.roleContainer}>
@@ -928,7 +1087,7 @@ const AdminHistory = ({ navigation, route }) => {
                   </TouchableOpacity>
                 </View>
               </View> */}
-              
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Active Status</Text>
                 <View style={styles.roleContainer}>
@@ -937,7 +1096,7 @@ const AdminHistory = ({ navigation, route }) => {
                       styles.roleButton,
                       editUserData.isActive === true && styles.roleButtonActive
                     ]}
-                    onPress={() => setEditUserData({...editUserData, isActive: true})}
+                    onPress={() => setEditUserData({ ...editUserData, isActive: true })}
                   >
                     <Text style={[
                       styles.roleButtonText,
@@ -951,7 +1110,7 @@ const AdminHistory = ({ navigation, route }) => {
                       styles.roleButton,
                       editUserData.isActive === false && styles.roleButtonActive
                     ]}
-                    onPress={() => setEditUserData({...editUserData, isActive: false})}
+                    onPress={() => setEditUserData({ ...editUserData, isActive: false })}
                   >
                     <Text style={[
                       styles.roleButtonText,
@@ -963,7 +1122,7 @@ const AdminHistory = ({ navigation, route }) => {
                 </View>
               </View>
             </ScrollView>
-            
+
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={styles.cancelButton}
@@ -1351,6 +1510,17 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+  },
+  inputError: {
+    borderColor: '#F44336',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: '#F44336',
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+    marginBottom: 0,
   },
 });
 

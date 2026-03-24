@@ -766,54 +766,126 @@ export const deleteUser = async (userId) => {
   }
 };
 
-/**
- * Register a new user
- * @param {Object} userData - User registration data
- * @param {string} userData.name - User name (required)
- * @param {string} userData.email - User email (required)
- * @param {string} userData.password - Password (required)
- * @param {string} userData.mobile_no - Mobile number
- * @param {string} userData.address - Address
- * @param {number} userData.role_id - Role ID (1 = Admin, 0 = User) (required)
- * @param {string} userData.createdby - Required if creating user under admin
- * @param {object} userData.avtar - Profile image file
- * @returns {Promise<{success: boolean, data: any, message: string}>}
- */
+// /**
+//  * Register a new user
+//  * @param {Object} userData - User registration data
+//  * @param {string} userData.name - User name (required)
+//  * @param {string} userData.email - User email (required)
+//  * @param {string} userData.password - Password (required)
+//  * @param {string} userData.mobile_no - Mobile number
+//  * @param {string} userData.address - Address
+//  * @param {number} userData.role_id - Role ID (1 = Admin, 0 = User) (required)
+//  * @param {string} userData.createdby - Required if creating user under admin
+//  * @param {object} userData.avtar - Profile image file
+//  * @returns {Promise<{success: boolean, data: any, message: string}>}
+//  */
+// export const registerUser = async (userData) => {
+//   try {
+//     const avatarMeta = userData?.avtar
+//       ? {
+//           uri: userData.avtar.uri,
+//           type: userData.avtar.type || 'image/jpeg',
+//           fileName: userData.avtar.fileName || userData.avtar.name,
+//         }
+//       : null;
+
+//     // console.log("Registering new user with data =====>", {
+//     //   ...userData,
+//     //   password: userData?.password ? '***MASKED***' : undefined,
+//     //   avtar: avatarMeta,
+//     // });
+
+//     // Create FormData for multipart/form-data
+//     const formData = new FormData();
+
+//     // Append required fields
+//     formData.append('name', userData.name);
+//     formData.append('email', userData.email);
+//     formData.append('password', userData.password);
+//     formData.append('role_id', String(userData.role_id));
+
+//     // NOTE: Logging full FormData can be noisy / non-serializable in RN.
+//     // console.log("RegisterUser FormData avatar meta =====>", avatarMeta);
+
+
+//     // Append optional fields
+//     if (userData.mobile_no) formData.append('mobile_no', userData.mobile_no);
+//     if (userData.address) formData.append('address', userData.address);
+//     if (userData.createdby) formData.append('createdby', userData.createdby);
+
+//     // Append avatar if provided
+//     if (userData.avtar) {
+//       formData.append('avtar', userData.avtar);
+//     }
+
+//     const response = await fetch(`${BASE_URL}/api/users/register`, {
+//       method: 'POST',
+//       body: formData,
+//     });
+
+//     // console.log("Register User API Status =====>", response.status);
+
+//     const text = await response.text();
+//     // console.log("Register User Raw API Response =====>", text);
+
+//     if (!text) {
+//       return {
+//         success: false,
+//         data: null,
+//         message: 'Empty response from server'
+//       };
+//     }
+
+//     const result = JSON.parse(text);
+
+//     // console.log("Register User Parsed Result =====>", result);
+
+//     if (response.ok && result.user) {
+//       return {
+//         success: true,
+//         data: result.user,
+//         message: result.message || 'User registered successfully'
+//       };
+//     } else {
+//       return {
+//         success: false,
+//         data: null,
+//         message: result.message || 'Failed to register user',
+//         status: response.status
+//       };
+//     }
+
+//   } catch (error) {
+//     console.error('AdminService Error registering user =====>', error);
+
+//     return {
+//       success: false,
+//       data: null,
+//       message: error.message || 'Something went wrong'
+//     };
+//   }
+// };
+// Updated registerUser function in AdminService.js
 export const registerUser = async (userData) => {
   try {
     const avatarMeta = userData?.avtar
       ? {
-          uri: userData.avtar.uri,
-          type: userData.avtar.type || 'image/jpeg',
-          fileName: userData.avtar.fileName || userData.avtar.name,
-        }
+        uri: userData.avtar.uri,
+        type: userData.avtar.type || 'image/jpeg',
+        fileName: userData.avtar.fileName || userData.avtar.name,
+      }
       : null;
 
-    // console.log("Registering new user with data =====>", {
-    //   ...userData,
-    //   password: userData?.password ? '***MASKED***' : undefined,
-    //   avtar: avatarMeta,
-    // });
-
-    // Create FormData for multipart/form-data
     const formData = new FormData();
-
-    // Append required fields
     formData.append('name', userData.name);
     formData.append('email', userData.email);
     formData.append('password', userData.password);
     formData.append('role_id', String(userData.role_id));
 
-    // NOTE: Logging full FormData can be noisy / non-serializable in RN.
-    // console.log("RegisterUser FormData avatar meta =====>", avatarMeta);
-    
-
-    // Append optional fields
     if (userData.mobile_no) formData.append('mobile_no', userData.mobile_no);
     if (userData.address) formData.append('address', userData.address);
     if (userData.createdby) formData.append('createdby', userData.createdby);
-    
-    // Append avatar if provided
+
     if (userData.avtar) {
       formData.append('avtar', userData.avtar);
     }
@@ -823,10 +895,7 @@ export const registerUser = async (userData) => {
       body: formData,
     });
 
-    // console.log("Register User API Status =====>", response.status);
-
     const text = await response.text();
-    // console.log("Register User Raw API Response =====>", text);
 
     if (!text) {
       return {
@@ -838,8 +907,6 @@ export const registerUser = async (userData) => {
 
     const result = JSON.parse(text);
 
-    // console.log("Register User Parsed Result =====>", result);
-
     if (response.ok && result.user) {
       return {
         success: true,
@@ -847,10 +914,12 @@ export const registerUser = async (userData) => {
         message: result.message || 'User registered successfully'
       };
     } else {
+      // Return the full response including errors array
       return {
         success: false,
         data: null,
         message: result.message || 'Failed to register user',
+        errors: result.errors || null, // This contains the validation errors array
         status: response.status
       };
     }
@@ -1008,7 +1077,7 @@ export const getLastFiveTrackedUsers = async (adminId) => {
       
       // Clear invalid token
       await AsyncStorage.removeItem('authToken');
-      
+
       return {
         success: false,
         data: null,
