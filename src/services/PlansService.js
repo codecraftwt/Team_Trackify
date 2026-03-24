@@ -2,8 +2,8 @@ import Api from '../config/Api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Razorpay Key
-// export const RAZORPAY_KEY = 'rzp_test_SN1JoYwhNqRjPV';
-export const RAZORPAY_KEY = "rzp_live_0fMe7hBqXJktWH"
+export const RAZORPAY_KEY = 'rzp_test_SN1JoYwhNqRjPV';
+// export const RAZORPAY_KEY = "rzp_live_0fMe7hBqXJktWH"
 
 /**
  * Get admin ID from AsyncStorage
@@ -397,3 +397,156 @@ export const getPurchaseEligibility = (subscriptionStatus, planName) => {
     disableReason,
   };
 };
+
+// ==================== CUSTOM PLAN APIS ====================
+
+/**
+ * Create a custom plan for the authenticated user
+ * @param {Object} planData - Custom plan data
+ * @param {number} planData.minUsers - Minimum number of users
+ * @param {number} planData.maxUsers - Maximum number of users
+ * @param {number} planData.durationValue - Duration value
+ * @param {string} planData.durationUnit - Duration unit (day, days, week, weeks, month, months, year, years)
+ * @param {string} [planData.status] - Plan status (active/inactive, defaults to 'active')
+ * @returns {Promise<Object>} - Created custom plan object
+ */
+export const createCustomPlan = async (planData) => {
+  try {
+    // Validate required fields
+    if (!planData.minUsers || !planData.maxUsers || !planData.durationValue || !planData.durationUnit) {
+      throw new Error('All fields are required: minUsers, maxUsers, durationValue, durationUnit');
+    }
+
+    // Get auth token
+    let token = await AsyncStorage.getItem('token');
+    if (!token) {
+      token = await AsyncStorage.getItem('authToken');
+    }
+
+    const response = await Api.post('/api/plans/custom', planData, {
+      headers: token ? { 
+        Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` 
+      } : {}
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Create custom plan error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Failed to create custom plan');
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection. Ensure backend server is running.');
+    } else {
+      throw new Error(error.message || 'Something went wrong. Please try again.');
+    }
+  }
+};
+
+/**
+ * Get the authenticated user's custom plan
+ * @returns {Promise<Object>} - User's custom plan object
+ */
+export const getUserCustomPlan = async () => {
+  try {
+    // Get auth token
+    let token = await AsyncStorage.getItem('token');
+    if (!token) {
+      token = await AsyncStorage.getItem('authToken');
+    }
+
+    const response = await Api.get('/api/plans/custom/my-plan', {
+      headers: token ? { 
+        Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` 
+      } : {}
+    });
+    console.log("response.data =====>>> plan ", response.data)
+    
+    return response.data;
+  } catch (error) {
+    console.error('Get user custom plan error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    if (error.response) {
+      // Check if it's a 404 (no custom plan found)
+      if (error.response.status === 404) {
+        return null;
+      }
+      throw new Error(error.response.data?.message || 'Failed to fetch custom plan');
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection.');
+    } else {
+      throw new Error(error.message || 'Something went wrong. Please try again.');
+    }
+  }
+};
+
+/**
+ * Update an existing custom plan
+ * @param {string} planId - ID of the custom plan to update
+ * @param {Object} updateData - Data to update
+ * @param {number} [updateData.minUsers] - Minimum number of users
+ * @param {number} [updateData.maxUsers] - Maximum number of users
+ * @param {number} [updateData.durationValue] - Duration value
+ * @param {string} [updateData.durationUnit] - Duration unit (day, days, week, weeks, month, months, year, years)
+ * @param {string} [updateData.status] - Plan status (active/inactive)
+ * @returns {Promise<Object>} - Updated custom plan object
+ */
+export const updateCustomPlan = async (planId, updateData) => {
+  try {
+    if (!planId) {
+      throw new Error('Plan ID is required');
+    }
+
+    // Get auth token
+    let token = await AsyncStorage.getItem('token');
+    if (!token) {
+      token = await AsyncStorage.getItem('authToken');
+    }
+
+    const response = await Api.put(`/api/plans/custom/${planId}`, updateData, {
+      headers: token ? { 
+        Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` 
+      } : {}
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Update custom plan error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Failed to update custom plan');
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection. Ensure backend server is running.');
+    } else {
+      throw new Error(error.message || 'Something went wrong. Please try again.');
+    }
+  }
+};
+
+/**
+ * Check if user has a custom plan
+ * @returns {Promise<boolean>} - True if user has a custom plan, false otherwise
+ */
+export const hasCustomPlan = async () => {
+  try {
+    const customPlan = await getUserCustomPlan();
+    return customPlan !== null && customPlan.plan !== null;
+  } catch (error) {
+    console.error('Error checking custom plan existence:', error);
+    return false;
+  }
+};
+
+// ==================== END CUSTOM PLAN APIS ====================

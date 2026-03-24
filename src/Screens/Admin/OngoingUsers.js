@@ -1,11 +1,15 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ActivityIndicator,
   SafeAreaView,
-  Alert
+  Alert,
+  TouchableOpacity,
+  Modal,
+  ScrollView,
+  Dimensions
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -24,14 +28,9 @@ const MARKER_COLORS = [
   "#FF9800", // Orange
   "#795548", // Brown
   "#607D8B", // Blue Grey
-  "#F44336", // Red
-  "#3F51B5", // Indigo
-  "#009688", // Teal
-  "#CDDC39", // Lime
-  "#FFEB3B", // Yellow
 ];
 
-// Function to check if coordinates are valid
+// Function to check if coordinates are valid (not zero and within range)
 const isValidCoordinate = (latitude, longitude) => {
   // Check if coordinates are numbers and not null/undefined
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
@@ -55,78 +54,90 @@ const isValidCoordinate = (latitude, longitude) => {
   return true;
 };
 
-// Function to get marker color based on user ID for consistency
-const getMarkerColor = (userId, index) => {
-  // Use userId hash for consistent color per user across refreshes
-  const hash = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return MARKER_COLORS[hash % MARKER_COLORS.length];
-};
-
 const OngoingUsers = ({ navigation }) => {
-
   const [loading, setLoading] = useState(true);
-  const [users, setUsers] = useState([]);
+  const [activeUserLocations, setActiveUserLocations] = useState([]);
+  const [usersWithInvalidLocation, setUsersWithInvalidLocation] = useState([]);
+  const [showInvalidUsersModal, setShowInvalidUsersModal] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
 
-  useEffect(() => {
-    fetchLocations();
-
-    const interval = setInterval(() => {
-      fetchLocations();
-    }, 5000); // auto refresh every 5 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Function to calculate bounds that fit all user markers
-  const calculateMapBounds = (usersWithValidLocations) => {
-    if (!usersWithValidLocations || usersWithValidLocations.length === 0) {
-      return null;
-    }
-
-    if (usersWithValidLocations.length === 1) {
-      return {
-        latitude: usersWithValidLocations[0].currentLocation.latitude,
-        longitude: usersWithValidLocations[0].currentLocation.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      };
-    }
-
-    let minLat = usersWithValidLocations[0].currentLocation.latitude;
-    let maxLat = usersWithValidLocations[0].currentLocation.latitude;
-    let minLng = usersWithValidLocations[0].currentLocation.longitude;
-    let maxLng = usersWithValidLocations[0].currentLocation.longitude;
-
-    usersWithValidLocations.forEach((user) => {
-      const { latitude, longitude } = user.currentLocation;
-      if (latitude < minLat) minLat = latitude;
-      if (latitude > maxLat) maxLat = latitude;
-      if (longitude < minLng) minLng = longitude;
-      if (longitude > maxLng) maxLng = longitude;
-    });
-
-    const centerLat = (minLat + maxLat) / 2;
-    const centerLng = (minLng + maxLng) / 2;
-    
-    // Add padding to the bounds
-    const latDelta = (maxLat - minLat) * 1.5 || 0.05;
-    const lngDelta = (maxLng - minLng) * 1.5 || 0.05;
-
-    return {
-      latitude: centerLat,
-      longitude: centerLng,
-      latitudeDelta: Math.max(latDelta, 0.02),
-      longitudeDelta: Math.max(lngDelta, 0.02),
-    };
+  // Function to get marker color based on index
+  const getMarkerColor = (index) => {
+    return MARKER_COLORS[index % MARKER_COLORS.length];
   };
 
-  // Default location for users without valid coordinates (India center)
-  const DEFAULT_LAT = 20.5937;
-  const DEFAULT_LNG = 78.9629;
+  // Function to fit all markers on the map - IMPROVED VERSION
+  const fitAllMarkers = useCallback(() => {
+    if (!mapRef.current || activeUserLocations.length === 0) {
+      console.log("Cannot fit markers: mapRef or locations missing");
+      return;
+    }
 
-  const fetchLocations = async () => {
+    // Get all valid coordinates
+    const coordinates = activeUserLocations.map(location => ({
+      latitude: location.latitude,
+      longitude: location.longitude,
+    }));
+
+    console.log(`Fitting ${coordinates.length} markers on map:`, coordinates);
+
+    // Add a small delay to ensure map is ready
+    setTimeout(() => {
+      if (mapRef.current && coordinates.length > 0) {
+        mapRef.current.fitToCoordinates(coordinates, {
+          edgePadding: {
+            top: 50,
+            right: 50,
+            bottom: 50,
+            left: 50
+          },
+          animated: true,
+        });
+
+        // Log after fit attempt
+        console.log("Map fit triggered");
+      }
+    }, 200);
+  }, [activeUserLocations]);
+
+  // Function to get center point of all markers (fallback if fitToCoordinates fails)
+  const getCenterPoint = useCallback(() => {
+    if (activeUserLocations.length === 0) return null;
+
+    let totalLat = 0;
+    let totalLng = 0;
+
+    activeUserLocations.forEach(location => {
+      totalLat += location.latitude;
+      totalLng += location.longitude;
+    });
+
+    return {
+      latitude: totalLat / activeUserLocations.length,
+      longitude: totalLng / activeUserLocations.length,
+    };
+  }, [activeUserLocations]);
+
+  // Fit markers when map is ready and data is loaded
+  useEffect(() => {
+    if (mapReady && activeUserLocations.length > 0) {
+      console.log("Map ready, fitting markers...");
+      fitAllMarkers();
+    }
+  }, [mapReady, activeUserLocations, fitAllMarkers]);
+
+  // Fallback: If map doesn't fit automatically, try again after data updates
+  useEffect(() => {
+    if (activeUserLocations.length > 0 && mapRef.current) {
+      const timer = setTimeout(() => {
+        fitAllMarkers();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeUserLocations, fitAllMarkers]);
+
+  const fetchLocations = useCallback(async () => {
     try {
       const adminId = await AsyncStorage.getItem("userId");
 
@@ -137,217 +148,357 @@ const OngoingUsers = ({ navigation }) => {
       }
 
       const result = await getActiveUsersCurrentLocations(adminId);
-      // console.log("API Response:", result); // Debug log
+      console.log("API Response:", result);
 
       if (result.success && result.data) {
         const activeUsers = result.data.activeUsers || [];
-        
-        // Process ALL users - keep both valid and invalid location users
-        const usersWithValidLocations = activeUsers.filter((user) => {
+
+        // Separate valid and invalid users
+        const validLocations = [];
+        const invalidUsers = [];
+
+        activeUsers.forEach((user, index) => {
+          // Check if user has location data
           if (!user.currentLocation) {
-            // console.log(`User ${user.user?.name} has no location data`);
-            return false;
+            invalidUsers.push({
+              userId: user.user.userId,
+              name: user.user.name,
+              email: user.user.email,
+              reason: "No location data"
+            });
+            return;
           }
-          
+
           const { latitude, longitude } = user.currentLocation;
           const isValid = isValidCoordinate(latitude, longitude);
-          
-          if (!isValid) {
-            console.log(`User ${user.user?.name} has invalid coordinates: (${latitude}, ${longitude})`);
+
+          if (isValid) {
+            // Add to valid locations for map display
+            validLocations.push({
+              userId: user.user.userId,
+              name: user.user.name,
+              email: user.user.email,
+              latitude: parseFloat(latitude),
+              longitude: parseFloat(longitude),
+              timestamp: user.currentLocation.timestamp,
+              lastUpdated: user.currentLocation.lastUpdated,
+              isOnline: user.currentLocation.isOnline
+            });
+          } else {
+            // Add to invalid users list for warning
+            invalidUsers.push({
+              userId: user.user.userId,
+              name: user.user.name,
+              email: user.user.email,
+              reason: latitude === 0 && longitude === 0 ? "Location (0,0) - User not sharing location" : "Invalid coordinates",
+              coordinates: { latitude, longitude }
+            });
           }
-          
-          return isValid;
         });
 
-        // console.log(`Total users: ${activeUsers.length}`);
-        // console.log(`Users with valid locations: ${usersWithValidLocations.length}`);
-        
-        // if (usersWithValidLocations.length > 0) {
-        //   console.log("Valid user locations:", usersWithValidLocations.map(u => ({
-        //     name: u.user.name,
-        //     lat: u.currentLocation.latitude,
-        //     lng: u.currentLocation.longitude
-        //   })));
-        // }
-        
-        // Store all users - both valid and invalid
-        setUsers(activeUsers);
+        console.log(`Found ${validLocations.length} users with valid locations`);
+        console.log(`Found ${invalidUsers.length} users with invalid locations`);
 
-        // Fit map to show all markers when map is ready and we have users
-        // Use all users (with default coords for invalid ones) for bounds calculation
-        const allUsersForBounds = activeUsers.map(user => {
-          if (!user.currentLocation || !isValidCoordinate(user.currentLocation.latitude, user.currentLocation.longitude)) {
-            return {
-              ...user,
-              currentLocation: { latitude: DEFAULT_LAT, longitude: DEFAULT_LNG }
-            };
-          }
-          return user;
-        });
+        setActiveUserLocations(validLocations);
+        setUsersWithInvalidLocation(invalidUsers);
 
-        if (mapReady && allUsersForBounds.length > 0 && mapRef.current) {
-          const bounds = calculateMapBounds(allUsersForBounds);
-          if (bounds) {
-            // console.log("Adjusting map to bounds:", bounds);
-            mapRef.current.animateToRegion(bounds, 500);
-          }
-        } else if (mapReady) {
-          // If no users at all, show default view
-          const defaultRegion = {
-            latitude: 20.5937,
-            longitude: 78.9629,
-            latitudeDelta: 8,
-            longitudeDelta: 8
-          };
-          // console.log("No users, showing default view");
-          mapRef.current.animateToRegion(defaultRegion, 500);
+        // If we have valid locations, trigger map fit after state update
+        if (validLocations.length > 0 && mapReady) {
+          setTimeout(() => fitAllMarkers(), 100);
         }
 
       } else {
         console.log("Location API Error:", result.message);
+        setActiveUserLocations([]);
       }
-
     } catch (error) {
-      // console.log("Location fetch error:", error);
+      console.log("Location fetch error:", error);
+      setActiveUserLocations([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [mapReady, fitAllMarkers]);
+
+  // Poll for location updates every 10 seconds (reduced from 5 to save battery)
+  useEffect(() => {
+    let cancelled = false;
+    let intervalId;
+
+    const fetchData = async () => {
+      if (!cancelled) {
+        await fetchLocations();
+      }
+    };
+
+    // Initial fetch
+    fetchData();
+
+    // Set up polling
+    intervalId = setInterval(fetchData, 10000);
+
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [fetchLocations]);
 
   const handleMarkerPress = (user) => {
     navigation.navigate("UserTrackingSummary", {
-      userId: user.user.userId,
-      userName: user.user.name
+      userId: user.userId,
+      userName: user.name
     });
   };
 
-  const onMapReady = () => {
-    setMapReady(true);
-    // Initial map adjustment when map is ready
-    if (users.length > 0 && mapRef.current) {
-      const bounds = calculateMapBounds(users);
-      if (bounds) {
-        // console.log("Initial map adjustment to bounds:", bounds);
-        mapRef.current.animateToRegion(bounds, 500);
-      }
-    }
-  };
-
-  if (loading) {
+  if (loading && activeUserLocations.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <CustomHeader title="Live Tracking Users" />
-        <View style={styles.loader}>
+        <CustomHeader
+          title="Live Tracking Users"
+          onBackPress={() => navigation.goBack()}
+        />
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3088C7" />
-          <Text>Loading live users...</Text>
+          <Text style={styles.loadingText}>Loading active users...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // Get users with valid locations for map bounds calculation
-  const usersWithValidLocations = users.filter((user) => {
-    if (!user.currentLocation) return false;
-    return isValidCoordinate(
-      user.currentLocation.latitude,
-      user.currentLocation.longitude
-    );
-  });
-
   return (
     <SafeAreaView style={styles.container}>
       <CustomHeader
         title="Live Tracking Users"
-        onBackPress={() => navigation.goBack()}
+        navigation={navigation}
+        showBackButton={true}
+        onBack={() => navigation.goBack()}
       />
 
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        onMapReady={onMapReady}
-        initialRegion={{
-          latitude: 20.5937,
-          longitude: 78.9629,
-          latitudeDelta: 8,
-          longitudeDelta: 8
-        }}
-        showsUserLocation={false}
-        showsMyLocationButton={true}
-      >
-        {users.map((item, index) => {
-          // Get coordinates - use default if invalid
-          let latitude = item.currentLocation?.latitude || DEFAULT_LAT;
-          let longitude = item.currentLocation?.longitude || DEFAULT_LNG;
-          
-          // Check if coordinates are valid
-          const hasValidCoords = isValidCoordinate(latitude, longitude);
-          
-          // If invalid (0,0), use default location
-          if (!hasValidCoords) {
-            latitude = DEFAULT_LAT;
-            longitude = DEFAULT_LNG;
-          }
-          
-          const markerColor = getMarkerColor(item.user.userId, index);
-          
-          return (
-            <Marker
-              key={`marker-${item.user.userId}`}
-              coordinate={{
-                latitude: parseFloat(latitude),
-                longitude: parseFloat(longitude)
+      <View style={styles.mapContainer}>
+        {activeUserLocations.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              {usersWithInvalidLocation.length > 0
+                ? "No users with valid location found"
+                : "No active users found"}
+            </Text>
+            {usersWithInvalidLocation.length > 0 && (
+              <TouchableOpacity
+                style={styles.viewInvalidButton}
+                onPress={() => setShowInvalidUsersModal(true)}
+              >
+                <Text style={styles.viewInvalidButtonText}>
+                  View {usersWithInvalidLocation.length} user(s) with issues
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <>
+            <MapView
+              ref={mapRef}
+              style={styles.map}
+              provider={PROVIDER_GOOGLE}
+              onMapReady={() => {
+                console.log("Map is ready");
+                setMapReady(true);
               }}
-              title={hasValidCoords ? item.user.name : `${item.user.name} (Location unavailable)`}
-              description={hasValidCoords 
-                ? `${item.user.email}${item.currentLocation?.address && item.currentLocation.address !== 'Unknown Address' ? '\n' + item.currentLocation.address : ''}`
-                : `${item.user.email}\n⚠️ Location data not available`
-              }
-              pinColor={hasValidCoords ? markerColor : '#9E9E9E'} // Gray for invalid location
-              onPress={() => handleMarkerPress(item)}
-            />
-          );
-        })}
-      </MapView>
+              showsUserLocation={false}
+              showsMyLocationButton={true}
+              showsCompass={true}
+              zoomEnabled={true}
+              zoomControlEnabled={true}
+            >
+              {activeUserLocations.map((location, index) => (
+                <Marker
+                  key={`marker-${location.userId}-${index}`}
+                  coordinate={{
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                  }}
+                  title={location.name}
+                  description={`${location.email}${location.isOnline !== undefined ? ` • ${location.isOnline ? '🟢 Online' : '🔴 Offline'}` : ''}`}
+                  pinColor={getMarkerColor(index)}
+                // onPress={() => handleMarkerPress(location)}
+                >
+                  {/* Optional: Custom marker view with online/offline indicator */}
+                  <View style={styles.markerContainer}>
+                    <View style={[styles.markerPin, { backgroundColor: getMarkerColor(index) }]}>
+                      <Text style={styles.markerText}>
+                        {location.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    {location.isOnline && <View style={styles.onlineIndicator} />}
+                  </View>
+                </Marker>
+              ))}
+            </MapView>
 
-      {/* Show count of active users */}
-      {users.length > 0 && (
-        <View style={styles.userCountBadge}>
-          <Text style={styles.userCountText}>
-            📍 {users.length} Active {users.length === 1 ? 'User' : 'Users'}
-          </Text>
+            {/* Control buttons */}
+            <View style={styles.controlsContainer}>
+              {/* User count badge */}
+              <View style={styles.userCountBadge}>
+                <Text style={styles.userCountText}>
+                  📍 {activeUserLocations.length} Active {activeUserLocations.length === 1 ? 'User' : 'Users'}
+                </Text>
+              </View>
+
+              {/* Fit all markers button */}
+              {activeUserLocations.length > 1 && (
+                <TouchableOpacity
+                  style={styles.fitButton}
+                  onPress={fitAllMarkers}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.fitButtonText}>📍 Fit All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Warning badge for users with invalid locations */}
+            {usersWithInvalidLocation.length > 0 && (
+              <TouchableOpacity
+                style={styles.warningBadge}
+                onPress={() => setShowInvalidUsersModal(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.warningBadgeText}>
+                  ⚠️ {usersWithInvalidLocation.length} User{usersWithInvalidLocation.length > 1 ? 's' : ''} with Invalid Location
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </View>
+
+      {/* Modal to show users with invalid locations */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showInvalidUsersModal}
+        onRequestClose={() => setShowInvalidUsersModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                ⚠️ Users with Location Issues ({usersWithInvalidLocation.length})
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowInvalidUsersModal(false)}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalContent}>
+              {usersWithInvalidLocation.map((user, index) => (
+                <View key={`invalid-user-${user.userId}-${index}`} style={styles.invalidUserItem}>
+                  <View style={styles.invalidUserInfo}>
+                    <Text style={styles.invalidUserName}>{user.name}</Text>
+                    <Text style={styles.invalidUserEmail}>{user.email}</Text>
+                    <Text style={styles.invalidUserReason}>
+                      Reason: {user.reason}
+                      {user.coordinates && (
+                        ` (${user.coordinates.latitude}, ${user.coordinates.longitude})`
+                      )}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowInvalidUsersModal(false)}
+            >
+              <Text style={styles.modalCloseButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      )}
+      </Modal>
     </SafeAreaView>
   );
 };
-
-export default OngoingUsers;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff"
   },
-  map: {
-    flex: 1
+  mapContainer: {
+    flex: 1,
+    overflow: 'hidden',
   },
-  loader: {
+  map: {
+    flex: 1,
+  },
+  loadingContainer: {
     flex: 1,
     justifyContent: "center",
-    alignItems: "center"
+    alignItems: "center",
+    backgroundColor: "#f5f5f5"
   },
-  userCountBadge: {
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  viewInvalidButton: {
+    backgroundColor: '#FF5722',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  viewInvalidButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: 'grey',
+  },
+  controlsContainer: {
     position: 'absolute',
     top: 70,
     right: 10,
+    alignItems: 'flex-end',
+    zIndex: 1,
+  },
+  userCountBadge: {
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    zIndex: 1
+    marginBottom: 8,
   },
   userCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold'
+  },
+  fitButton: {
+    backgroundColor: 'rgba(48, 136, 199, 0.9)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  fitButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold'
@@ -357,15 +508,141 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 10,
     right: 10,
-    backgroundColor: 'rgba(255, 87, 34, 0.9)',
+    backgroundColor: 'rgba(255, 87, 34, 0.95)',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    zIndex: 1
+    paddingVertical: 10,
+    zIndex: 1,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
-  warningText: {
+  warningBadgeText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: 'bold',
     textAlign: 'center'
-  }
+  },
+  markerContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerPin: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  markerText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    width: '90%',
+    maxHeight: '80%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FF5722',
+  },
+  closeButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  modalContent: {
+    padding: 20,
+    maxHeight: 400,
+  },
+  invalidUserItem: {
+    marginBottom: 15,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  invalidUserInfo: {
+    flex: 1,
+  },
+  invalidUserName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  invalidUserEmail: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 4,
+  },
+  invalidUserReason: {
+    fontSize: 12,
+    color: '#FF5722',
+    marginTop: 4,
+  },
+  modalCloseButton: {
+    backgroundColor: '#FF5722',
+    padding: 15,
+    borderRadius: 10,
+    margin: 20,
+    alignItems: 'center',
+  },
+  modalCloseButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
+
+export default OngoingUsers;

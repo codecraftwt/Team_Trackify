@@ -26,7 +26,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
   const routeSubscriptionStatus = route?.params?.subscriptionStatus;
   // Use route params first, then fall back to auth context
   const subscriptionStatus = routeSubscriptionStatus || authSubscriptionStatus;
-  
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddOns, setShowAddOns] = useState(false);
@@ -54,7 +54,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
 
   // Check if subscription is expired
   const isSubscriptionExpiredFlag = subscriptionStatus?.isExpired === true;
-  
+
   // Get subscription warning message
   const subscriptionMessage = getSubscriptionMessage(subscriptionStatus);
 
@@ -71,7 +71,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
         setPlanExpired(subscriptionStatus.isExpired === true);
         return;
       }
-      
+
       // If not, try to load from AsyncStorage
       const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
       if (storedStatus) {
@@ -121,7 +121,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
     try {
       setLoadingActivities(true);
       const result = await getLastFiveTrackedUsers(adminId);
-      
+
       if (result.success) {
         // console.log('Recent Activities Data:', result.data);
         setRecentActivities(result.data || []);
@@ -164,7 +164,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
         getUserById(userId),
         getUserStats(userId)
       ]);
-    
+
       if (userResult.success) {
         // console.log('User Data:', userResult.data);
         // console.log('Plan Expired:', userResult.planExpired);
@@ -222,7 +222,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
   const handleCardPress = () => {
     navigation.navigate('ManagePlans');
   };
-   const handleCardPress2 = () => {
+  const handleCardPress2 = () => {
     navigation.navigate('OngoingUsers');
   };
 
@@ -346,13 +346,13 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                 <Icon name="card-membership" size={20} color="#3088C7" />
                 <Text style={styles.planTitle}>Current Plan Details</Text>
               </View>
-              <Icon 
-                name={showPlanDetails ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
-                size={24} 
-                color="#666" 
+              <Icon
+                name={showPlanDetails ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={24}
+                color="#666"
               />
             </TouchableOpacity>
-            
+
             {/* Always visible - Basic Plan Info */}
             <View style={styles.basicPlanInfo}>
               <View style={styles.planRow}>
@@ -361,14 +361,14 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                   {currentUser.currentPaymentId?.description || 'Basic Plan'}
                 </Text>
               </View>
-              
+
               <View style={styles.planRow}>
                 <Text style={styles.planLabel}>Amount:</Text>
                 <Text style={styles.planValue}>
                   ₹{currentUser.currentPaymentId?.amount || 0}
                 </Text>
               </View>
-              
+
               <View style={styles.planRow}>
                 <Text style={styles.planLabel}>Expiry Date:</Text>
                 <Text style={[
@@ -385,7 +385,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
             {showPlanDetails && (
               <View style={styles.hiddenDetails}>
                 <View style={styles.divider} />
-                
+
                 <View style={styles.planDetails}>
                   <View style={styles.planRow}>
                     <Text style={styles.planLabel}>Status:</Text>
@@ -398,7 +398,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                       </Text>
                     </View>
                   </View>
-                  
+
                   <View style={styles.planRow}>
                     <Text style={styles.planLabel}>Start Date:</Text>
                     <Text style={styles.planValue}>
@@ -449,10 +449,10 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                           Add-on Plans ({currentUser.currentPaymentId.addOns.length})
                         </Text>
                       </View>
-                      <Icon 
-                        name={showAddOns ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
-                        size={20} 
-                        color="#666" 
+                      <Icon
+                        name={showAddOns ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                        size={20}
+                        color="#666"
                       />
                     </TouchableOpacity>
 
@@ -539,7 +539,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                 )}
 
                 {planExpired && (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.renewButton}
                     onPress={() => navigation.navigate('RenewPlan')}
                   >
@@ -630,17 +630,18 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
               </View>
             </TouchableOpacity>
 
-              <TouchableOpacity
+            <TouchableOpacity
               style={styles.statCard}
               onPress={handleCardPress2}
-              >
+            >
               <View style={styles.cardHeader}>
                 <View style={styles.iconWrapper}>
                   <Icon name="my-location" size={24} color="#689F38" />
                 </View>
                 <Text style={styles.cardTitle}>Live Tracking Users</Text>
+                {/* currentlyTracking */}
               </View>
-              <Text style={styles.statValue}>1</Text>
+              <Text style={styles.statValue}>{userStats.currentlyTracking}</Text>
               <View style={styles.cardAction}>
                 <Text style={styles.actionText}>View on Map</Text>
                 <Icon name="map" size={16} color="#689F38" />
@@ -674,17 +675,17 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                   //   onPress={() => handleUserPress(activity.userId, activity.name)}
                   //   activeOpacity={0.7}
                   // >
-                   <View style={styles.activityItem}>
+                  <View style={styles.activityItem}>
                     <View style={styles.activityIconContainer}>
                       <View style={[styles.activityIcon, { backgroundColor: activity.status === 'active' ? '#E8F5E9' : '#FFF3E0' }]}>
-                        <Icon 
-                          name="person" 
-                          size={20} 
-                          color={activity.status === 'active' ? '#388E3C' : '#F57C00'} 
+                        <Icon
+                          name="person"
+                          size={20}
+                          color={activity.status === 'active' ? '#388E3C' : '#F57C00'}
                         />
                       </View>
                     </View>
-                    
+
                     <View style={styles.activityContent}>
                       <View style={styles.activityHeader}>
                         <Text style={styles.activityUserName} numberOfLines={1}>
@@ -694,10 +695,10 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                           styles.activityStatusBadge,
                           { backgroundColor: activity.status === 'active' ? '#E8F5E9' : '#FFF3E0' }
                         ]}>
-                          <Icon 
-                            name={getStatusIcon(activity.status)} 
-                            size={12} 
-                            color={activity.status === 'active' ? '#388E3C' : '#F57C00'} 
+                          <Icon
+                            name={getStatusIcon(activity.status)}
+                            size={12}
+                            color={activity.status === 'active' ? '#388E3C' : '#F57C00'}
                           />
                           <Text style={[
                             styles.activityStatusText,
@@ -707,7 +708,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                           </Text>
                         </View>
                       </View>
-                      
+
                       <View style={styles.activityFooter}>
                         <View style={styles.activityTime}>
                           <Icon name="access-time" size={14} color="#999" />
@@ -716,7 +717,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                         {/* <Icon name="chevron-right" size={20} color="#999" /> */}
                       </View>
                     </View>
-                    </View>
+                  </View>
                   // </TouchableOpacity>
                 ))}
               </View>

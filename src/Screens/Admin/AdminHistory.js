@@ -522,7 +522,7 @@ const AdminHistory = ({ navigation, route }) => {
         
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>History</Text>
+          <Text style={styles.headerTitle}>Users</Text>
           <Text style={styles.headerSubtitle}>Users under you</Text>
         </View>
 

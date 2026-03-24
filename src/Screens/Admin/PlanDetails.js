@@ -7,39 +7,31 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { 
-  getPlanById, 
-  createOrder, 
-  verifyPayment, 
+import {
+  getPlanById,
+  createOrder,
+  verifyPayment,
   RAZORPAY_KEY,
   getUserSubscriptionStatus,
   isAddOnPlan,
-  getPurchaseEligibility
+  getPurchaseEligibility,
+  getUserCustomPlan,
+  checkCustomPlanPurchaseEligibility
 } from '../../services/PlansService';
 import RazorpayCheckout from 'react-native-razorpay';
-// Dynamic import for Razorpay to handle potential loading issues
-// let RazorpayCheckout;
-// try {
-//   const Razorpay = require('react-native-razorpay');
-//   console.log('Razorpay module loaded:', Razorpay);
-//   RazorpayCheckout = Razorpay.default || Razorpay;
-//   console.log('RazorpayCheckout initialized:', RazorpayCheckout);
-// } catch (e) {
-//   console.warn('Razorpay package not available:', e);
-// }
+import CustomHeader from '../../Component/CustomHeader';
 
 export default function PlanDetails({ route, navigation }) {
-  const { planId } = route.params; // Get planId from navigation params
+  const { planId, isCustomPlan = false, customPlanData = null } = route.params;
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [purchasing, setPurchasing] = useState(false);
   const [razorpayReady, setRazorpayReady] = useState(false);
-  
+
   // Subscription status state
   const [subscriptionStatus, setSubscriptionStatus] = useState({
     hasActivePlan: false,
@@ -48,42 +40,75 @@ export default function PlanDetails({ route, navigation }) {
     currentPaymentId: null,
   });
   const [loadingSubscription, setLoadingSubscription] = useState(true);
-  
+
+  // Custom plan purchase tracking
+  const [hasPurchasedCustomPlan, setHasPurchasedCustomPlan] = useState(false);
+  const [checkingCustomPlanPurchase, setCheckingCustomPlanPurchase] = useState(false);
+
   // Check if buy button should be disabled
   const isAddOn = plan ? isAddOnPlan(plan.name) : false;
   const eligibility = getPurchaseEligibility(subscriptionStatus, plan?.name || '');
-  const isBuyDisabled = !eligibility.canBuy || purchasing || !razorpayReady;
+
+  // For custom plans, check if already purchased
+  const isCustomPlanAlreadyPurchased = isCustomPlan && hasPurchasedCustomPlan;
+  const isBuyDisabled = isCustomPlanAlreadyPurchased || !eligibility.canBuy || purchasing || !razorpayReady;
 
   useEffect(() => {
-    fetchPlanDetails();
+    if (isCustomPlan && customPlanData) {
+      // If it's a custom plan and data is passed directly
+      setPlan(customPlanData);
+      setLoading(false);
+      checkIfCustomPlanPurchased();
+    } else {
+      // Regular plan - fetch from API
+      fetchPlanDetails();
+    }
+
     fetchSubscriptionStatus();
-    
-    // Verify Razorpay is available after component mounts
+
+    // Verify Razorpay availability
     const timer = setTimeout(() => {
       if (RazorpayCheckout && typeof RazorpayCheckout.open === 'function') {
         setRazorpayReady(true);
-        // console.log('Razorpay is ready');
       } else {
-        console.warn('Razorpay not available:', {
-          RazorpayCheckout,
-          hasOpen: RazorpayCheckout?.open !== undefined
-        });
+        console.warn('Razorpay not available');
       }
     }, 500);
-    
+
     return () => clearTimeout(timer);
   }, []);
 
-  // Fetch subscription status
+  // Check if custom plan has been purchased already
+  const checkIfCustomPlanPurchased = async () => {
+    try {
+      setCheckingCustomPlanPurchase(true);
+      // You need to implement this function in your PlansService
+      const result = await checkCustomPlanPurchaseEligibility();
+      setHasPurchasedCustomPlan(result.hasPurchased);
+
+      if (result.hasPurchased) {
+        // Show alert that custom plan can only be purchased once
+        Alert.alert(
+          'Already Purchased',
+          'You can only purchase a custom plan once. This plan is already in your active subscriptions.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error checking custom plan purchase:', error);
+      setHasPurchasedCustomPlan(false);
+    } finally {
+      setCheckingCustomPlanPurchase(false);
+    }
+  };
+
   const fetchSubscriptionStatus = async () => {
     try {
       setLoadingSubscription(true);
       const status = await getUserSubscriptionStatus();
-      // console.log('Subscription status fetched:', status);
       setSubscriptionStatus(status);
     } catch (error) {
       console.error('Error fetching subscription status:', error);
-      // Set default status on error (allow purchase)
       setSubscriptionStatus({
         hasActivePlan: false,
         hasExpiredPlan: false,
@@ -95,37 +120,42 @@ export default function PlanDetails({ route, navigation }) {
     }
   };
 
-  // Handle Buy Plan payment
   const handleBuyPlan = async () => {
     if (!plan) return;
-    
-    // Check if Razorpay is available and has the open method
-    if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
+
+    // Prevent multiple purchases of custom plan
+    if (isCustomPlan && hasPurchasedCustomPlan) {
       Alert.alert(
-        'Error',
-        'Payment system is not available. Please restart the app or reinstall the package.',
+        'Already Purchased',
+        'You can only purchase a custom plan once.',
         [{ text: 'OK' }]
       );
       return;
     }
-    
+
+    if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
+      Alert.alert(
+        'Error',
+        'Payment system is not available. Please restart the app.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
       setPurchasing(true);
-      
-      // console.log('Creating order for plan:', planId);
-      
-      // Step 1: Create order from backend
-      const orderResponse = await createOrder(planId);
-      
-      // console.log('Order response:', orderResponse);
-      
+
+      // Create order - this should work for both regular and custom plans
+      // Make sure your createOrder function can handle custom plan IDs
+      const orderResponse = await createOrder(planId, isCustomPlan);
+
       if (!orderResponse.success) {
         throw new Error(orderResponse.message || 'Failed to create order');
       }
-      
+
       const { orderId, amount, paymentId, description } = orderResponse.data;
-      
-      // Step 2: Open Razorpay Checkout
+
+      // Open Razorpay Checkout
       const options = {
         description: description || `Purchase ${plan.name}`,
         image: 'https://i.imgur.com/3g7nmJC.png',
@@ -143,20 +173,23 @@ export default function PlanDetails({ route, navigation }) {
           color: '#4A90E2'
         }
       };
-      
-      // console.log('Opening Razorpay with options:', options);
+
       const razorpayResponse = await RazorpayCheckout.open(options);
-      // console.log('Razorpay response:', razorpayResponse);
-      
-      // Step 3: Verify payment with backend
+
+      // Verify payment
       const verifyResponse = await verifyPayment(
         razorpayResponse.razorpay_order_id,
         razorpayResponse.razorpay_payment_id,
         razorpayResponse.razorpay_signature,
         paymentId
       );
-      
+
       if (verifyResponse.success) {
+        // If it's a custom plan, mark it as purchased locally
+        if (isCustomPlan) {
+          setHasPurchasedCustomPlan(true);
+        }
+
         Alert.alert(
           'Payment Successful!',
           'Your plan has been purchased successfully.',
@@ -170,17 +203,12 @@ export default function PlanDetails({ route, navigation }) {
       } else {
         throw new Error(verifyResponse.message || 'Payment verification failed');
       }
-      
+
     } catch (err) {
       console.error('Payment error:', err);
-      
+
       let errorMessage = err.message || 'Something went wrong. Please try again.';
-      
-      // Provide more specific error messages for common issues
-      if (err.message && err.message.includes('Cannot read property')) {
-        errorMessage = 'Payment system is not properly initialized. Please reinstall the app.';
-      }
-      
+
       Alert.alert(
         'Payment Failed',
         errorMessage,
@@ -196,8 +224,7 @@ export default function PlanDetails({ route, navigation }) {
       setLoading(true);
       setError(null);
       const response = await getPlanById(planId);
-      
-      // Map the response to match our display format
+
       const planData = {
         id: response._id,
         name: response.name,
@@ -210,7 +237,7 @@ export default function PlanDetails({ route, navigation }) {
         createdAt: response.createdAt,
         updatedAt: response.updatedAt,
       };
-      
+
       setPlan(planData);
     } catch (err) {
       setError(err.message || 'Failed to fetch plan details');
@@ -221,6 +248,7 @@ export default function PlanDetails({ route, navigation }) {
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -229,95 +257,120 @@ export default function PlanDetails({ route, navigation }) {
     });
   };
 
-  if (loading || loadingSubscription) {
+  if (loading || loadingSubscription || checkingCustomPlanPurchase) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity 
+      <View style={styles.container}>
+        {/* <View style={styles.header}>
+          <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}>
             <Icon name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Plan Details</Text>
           <View style={styles.placeholder} />
-        </View>
+        </View> */}
+        <CustomHeader
+          title="Plan Details"
+          navigation={navigation}
+          showBackButton={true}
+          onBack={() => navigation.goBack()}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error || !plan) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity 
+      <View style={styles.container}>
+        {/* <View style={styles.header}>
+          <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}>
             <Icon name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Plan Details</Text>
           <View style={styles.placeholder} />
-        </View>
+        </View> */}
+        <CustomHeader
+          title="Plan Details"
+          navigation={navigation}
+          showBackButton={true}
+          onBack={() => navigation.goBack()}
+        />
         <View style={styles.errorContainer}>
           <Icon name="error-outline" size={60} color="#E74C3C" />
           <Text style={styles.errorText}>{error || 'Plan not found'}</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.retryButton}
             onPress={fetchPlanDetails}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()}
+      {/* <View style={styles.header}>
+        <TouchableOpacity
+          // onPress={() => navigation.goBack()}
+           onPress={() => navigation.navigate('ManagePlans')}
           style={styles.backButton}>
           <Icon name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Plan Details</Text>
-        {/* <TouchableOpacity 
-          onPress={() => navigation.navigate('ManagePlans')}
-          style={styles.editButton}>
-          <Icon name="edit" size={24} color="#4A90E2" />
-        </TouchableOpacity> */}
-      </View>
+        <View style={styles.placeholder} />
+      </View> */}
+      <CustomHeader
+        title="Plan Details"
+        navigation={navigation}
+        showBackButton={true}
+        onBack={() => navigation.goBack()}
+      />
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.contentContainer}>
-        
+
         {/* Status Badge */}
         <View style={styles.statusContainer}>
           <View style={[
             styles.statusBadge,
-            { backgroundColor: plan.status === 'active' ? '#E8F5E9' : '#FFEBEE' }
+            { backgroundColor: isCustomPlan ? '#F3E5F5' : (plan.status === 'active' ? '#E8F5E9' : '#FFEBEE') }
           ]}>
             <Text style={[
               styles.statusText,
-              { color: plan.status === 'active' ? '#2E7D32' : '#C62828' }
+              { color: isCustomPlan ? '#9C27B0' : (plan.status === 'active' ? '#2E7D32' : '#C62828') }
             ]}>
-              {plan.status?.toUpperCase() || 'ACTIVE'}
+              {isCustomPlan ? 'CUSTOM PLAN' : (plan.status?.toUpperCase() || 'ACTIVE')}
             </Text>
           </View>
         </View>
 
         {/* Plan Name Card */}
-        <View style={styles.nameCard}>
-          <Icon name={isAddOn ? "add-circle" : "star"} size={30} color={isAddOn ? "#F57C00" : "#4A90E2"} />
-          <Text style={styles.planName}>{plan.name}</Text>
-          {isAddOn && (
+        <View style={[styles.nameCard, isCustomPlan && styles.customPlanNameCard]}>
+          <Icon name={isCustomPlan ? "build" : (isAddOn ? "add-circle" : "star")}
+            size={30}
+            color={isCustomPlan ? "#9C27B0" : (isAddOn ? "#F57C00" : "#4A90E2")} />
+          <Text style={[styles.planName, isCustomPlan && styles.customPlanNameText]}>
+            {plan.name}
+          </Text>
+          {isAddOn && !isCustomPlan && (
             <View style={styles.addOnBadge}>
               <Text style={styles.addOnBadgeText}>ADD-ON</Text>
+            </View>
+          )}
+          {isCustomPlan && (
+            <View style={[styles.customPlanBadge, { backgroundColor: '#E1BEE7' }]}>
+              <Icon name="star" size={12} color="#9C27B0" />
+              <Text style={styles.customPlanBadgeText}>CUSTOM PLAN</Text>
             </View>
           )}
         </View>
@@ -325,10 +378,12 @@ export default function PlanDetails({ route, navigation }) {
         {/* Description Card */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
-            <Icon name="description" size={22} color="#4A90E2" />
+            <Icon name="description" size={22} color={isCustomPlan ? "#9C27B0" : "#4A90E2"} />
             <Text style={styles.sectionTitle}>Description</Text>
           </View>
-          <Text style={styles.descriptionText}>{plan.description}</Text>
+          <Text style={styles.descriptionText}>
+            {plan.description || `Custom plan with ${plan.minUsers}-${plan.maxUsers} users for ${plan.durationValue} ${plan.durationUnit}`}
+          </Text>
         </View>
 
         {/* Details Grid */}
@@ -340,7 +395,7 @@ export default function PlanDetails({ route, navigation }) {
             </View>
             <Text style={styles.detailLabel}>Price</Text>
             <Text style={[styles.detailValue, styles.priceValue]}>
-              ₹{plan.price.toLocaleString()}
+              ₹{plan.price?.toLocaleString() || 'N/A'}
             </Text>
           </View>
 
@@ -350,7 +405,9 @@ export default function PlanDetails({ route, navigation }) {
               <Icon name="schedule" size={24} color="#1976D2" />
             </View>
             <Text style={styles.detailLabel}>Duration</Text>
-            <Text style={styles.detailValue}>{plan.duration}</Text>
+            <Text style={styles.detailValue}>
+              {plan.duration || `${plan.durationValue} ${plan.durationUnit}`}
+            </Text>
           </View>
 
           {/* Min Users Card */}
@@ -373,35 +430,47 @@ export default function PlanDetails({ route, navigation }) {
         </View>
 
         {/* User Range Summary */}
-        <View style={styles.summaryCard}>
-          <Icon name="group-work" size={24} color="#4A90E2" />
-          <Text style={styles.summaryText}>
+        <View style={[styles.summaryCard, isCustomPlan && styles.customPlanSummaryCard]}>
+          <Icon name="group-work" size={24} color={isCustomPlan ? "#9C27B0" : "#4A90E2"} />
+          <Text style={[styles.summaryText, isCustomPlan && styles.customPlanSummaryText]}>
             Supports {plan.minUsers} - {plan.maxUsers} users
           </Text>
         </View>
 
         {/* Additional Info */}
         <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Icon name="event" size={18} color="#666" />
-            <Text style={styles.infoLabel}>Created:</Text>
-            <Text style={styles.infoValue}>{formatDate(plan.createdAt)}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Icon name="update" size={18} color="#666" />
-            <Text style={styles.infoLabel}>Last Updated:</Text>
-            <Text style={styles.infoValue}>{formatDate(plan.updatedAt)}</Text>
-          </View>
+          {(plan.createdAt || plan.updatedAt) && (
+            <>
+              {plan.createdAt && (
+                <View style={styles.infoRow}>
+                  <Icon name="event" size={18} color="#666" />
+                  <Text style={styles.infoLabel}>Created:</Text>
+                  <Text style={styles.infoValue}>{formatDate(plan.createdAt)}</Text>
+                </View>
+              )}
+              {plan.updatedAt && (
+                <View style={styles.infoRow}>
+                  <Icon name="update" size={18} color="#666" />
+                  <Text style={styles.infoLabel}>Last Updated:</Text>
+                  <Text style={styles.infoValue}>{formatDate(plan.updatedAt)}</Text>
+                </View>
+              )}
+            </>
+          )}
           <View style={styles.infoRow}>
             <Icon name="vpn-key" size={18} color="#666" />
             <Text style={styles.infoLabel}>Plan ID:</Text>
-            <Text style={[styles.infoValue, styles.planId]}>{plan.id}</Text>
+            <Text style={[styles.infoValue, styles.planId]}>{plan.id || plan._id}</Text>
           </View>
         </View>
 
         {/* Buy Plan Button */}
         <TouchableOpacity
-          style={[styles.buyButton, isBuyDisabled && styles.buyButtonDisabled]}
+          style={[
+            styles.buyButton,
+            isCustomPlan && styles.customPlanBuyButton,
+            isBuyDisabled && styles.buyButtonDisabled
+          ]}
           onPress={handleBuyPlan}
           disabled={isBuyDisabled}
           activeOpacity={0.8}
@@ -412,6 +481,11 @@ export default function PlanDetails({ route, navigation }) {
             <>
               <Icon name="error-outline" size={22} color="#fff" />
               <Text style={styles.buyButtonText}>Payment Unavailable</Text>
+            </>
+          ) : isCustomPlanAlreadyPurchased ? (
+            <>
+              <Icon name="check-circle" size={22} color="#fff" />
+              <Text style={styles.buyButtonText}>Already Purchased</Text>
             </>
           ) : !eligibility.canBuy ? (
             <>
@@ -424,16 +498,24 @@ export default function PlanDetails({ route, navigation }) {
             <>
               <Icon name="shopping-cart" size={22} color="#fff" />
               <Text style={styles.buyButtonText}>
-                {isAddOn ? 'Buy Add-on' : 'Buy Plan'}
+                {isCustomPlan ? 'Buy Custom Plan' : (isAddOn ? 'Buy Add-on' : 'Buy Plan')}
               </Text>
             </>
           )}
         </TouchableOpacity>
-        
+
         {/* Subscription Status Info */}
         {loadingSubscription ? null : (
           <View style={styles.subscriptionInfoContainer}>
-            {subscriptionStatus.hasActivePlan && (
+            {isCustomPlanAlreadyPurchased && (
+              <View style={styles.subscriptionInfo}>
+                <Icon name="check-circle" size={16} color="#27AE60" />
+                <Text style={styles.subscriptionInfoText}>
+                  You have already purchased this custom plan. You can only purchase it once.
+                </Text>
+              </View>
+            )}
+            {subscriptionStatus.hasActivePlan && !isCustomPlanAlreadyPurchased && (
               <View style={styles.subscriptionInfo}>
                 <Icon name="check-circle" size={16} color="#27AE60" />
                 <Text style={styles.subscriptionInfoText}>
@@ -449,7 +531,7 @@ export default function PlanDetails({ route, navigation }) {
                 </Text>
               </View>
             )}
-            {subscriptionStatus.hasNoPlan && isAddOn && (
+            {subscriptionStatus.hasNoPlan && isAddOn && !isCustomPlan && (
               <View style={styles.subscriptionInfo}>
                 <Icon name="info" size={16} color="#1976D2" />
                 <Text style={styles.subscriptionInfoText}>
@@ -457,12 +539,22 @@ export default function PlanDetails({ route, navigation }) {
                 </Text>
               </View>
             )}
+            {isCustomPlan && !hasPurchasedCustomPlan && subscriptionStatus.hasNoPlan && (
+              <View style={styles.subscriptionInfo}>
+                <Icon name="info" size={16} color="#9C27B0" />
+                <Text style={styles.subscriptionInfoText}>
+                  You can purchase this custom plan as your base plan.
+                </Text>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
+
+// Add these styles to your existing styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -473,27 +565,26 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#f8f8f8',
   },
-header: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'flex-start',
-  paddingHorizontal: 16,
-  paddingVertical: 12,
-  backgroundColor: '#fff',
-  borderBottomWidth: 1,
-  borderBottomColor: '#f0f0f0',
-  position: 'relative',
-},
-
-headerTitle: {
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  textAlign: 'center',
-  fontSize: 20,
-  fontFamily: 'Poppins-SemiBold',
-  color: '#333',
-},
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    position: 'relative',
+  },
+  headerTitle: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 20,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#333',
+  },
   editButton: {
     padding: 8,
     borderRadius: 8,
@@ -750,5 +841,44 @@ headerTitle: {
     color: '#666',
     fontFamily: 'Rubik-Regular',
     flex: 1,
+  },
+  customPlanNameCard: {
+    backgroundColor: '#F3E5F5',
+  },
+  customPlanNameText: {
+    color: '#9C27B0',
+  },
+  customPlanBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E1BEE7',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  customPlanBadgeText: {
+    color: '#9C27B0',
+    fontSize: 12,
+    fontFamily: 'Poppins-Bold',
+    marginLeft: 4,
+    letterSpacing: 0.5,
+  },
+  customPlanSummaryCard: {
+    backgroundColor: '#F3E5F5',
+  },
+  customPlanSummaryText: {
+    color: '#9C27B0',
+  },
+  customPlanBuyButton: {
+    backgroundColor: '#9C27B0',
+    shadowColor: '#9C27B0',
+  },
+  buyButtonDisabled: {
+    backgroundColor: '#CCC',
+    shadowOpacity: 0,
+  },
+  editCustomPlanButtonContainer: {
+    marginTop: 8,
   },
 });
