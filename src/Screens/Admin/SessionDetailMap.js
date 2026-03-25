@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Image,
-  Platform,
+  // Platform,
   FlatList,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -19,7 +19,7 @@ import FancyAlert from '../FancyAlert';
 import Api from '../../config/Api';
 import CustomHeader from '../../Component/CustomHeader';
 
-const { width } = Dimensions.get('window');
+// const { width } = Dimensions.get('window');
 
 // Simple haversine-distance helper (meters)
 const calculateDistance = (lat1, lon1, lat2, lon2) => {

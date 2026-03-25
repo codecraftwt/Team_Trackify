@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler'; // 🔥 Must be first import
 import './src/database'; // Initialize WatermelonDB for offline tracking
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AppNavigator from './src/Navigation/AppNavigator';
 import { AuthProvider } from './src/config/auth-context';
@@ -9,14 +9,12 @@ import Toast from 'react-native-toast-message';
 import { requestLocationPermission } from './src/Screens/CameraPermissionService';
 import { registerTrackingForegroundService } from './src/services/BackgroundTrackingService';
 import NotificationManager from './src/Notifications/NotificationManager';
-import { setupSyncOnReconnect, syncPendingLocations } from './src/services/SyncService';
+import { setupSyncOnReconnect, syncPendingLocations, cleanupSyncListeners } from './src/services/SyncService';
 
 
 global.Buffer = Buffer;
 
 const App = () => {
-  const syncUnsubscribeRef = useRef(null);
-
   useEffect(() => {
     requestLocationPermission(); // 👈 Ask for location permission on app load
     registerTrackingForegroundService(); // 👈 Register foreground service for background tracking notifications
@@ -24,7 +22,7 @@ const App = () => {
 
     // 👈 Global sync listener - persists even when tracking screen is unmounted
     // This ensures offline data syncs when network becomes available
-    syncUnsubscribeRef.current = setupSyncOnReconnect((result) => {
+    setupSyncOnReconnect((result) => {
       console.log('[App] Network restored, sync result:', result);
       if (result?.success && result?.synced > 0) {
         console.log('[App] Successfully synced', result.synced, 'location(s)');
@@ -42,9 +40,7 @@ const App = () => {
 
     return () => {
       // Cleanup sync listener on app unmount
-      if (syncUnsubscribeRef.current) {
-        syncUnsubscribeRef.current();
-      }
+      cleanupSyncListeners();
     };
   }, []);
 

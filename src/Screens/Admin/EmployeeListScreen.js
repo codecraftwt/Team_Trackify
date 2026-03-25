@@ -6,22 +6,22 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import BASE_URL from "../../config/server"; 
 
 // --- Utility Function for JWT Decoding (Same as in SalarySlip) ---
-const decodeJWT = (token) => {
-    try {
-        const base64Url = token.split(".")[1]
-        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
-        const jsonPayload = decodeURIComponent(
-            atob(base64)
-                .split("")
-                .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-                .join(""),
-        )
-        return JSON.parse(jsonPayload)
-    } catch (error) {
-        console.error("JWT Decode Error:", error)
-        return null
-    }
-}
+// const decodeJWT = (token) => {
+//     try {
+//         const base64Url = token.split(".")[1]
+//         const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/")
+//         const jsonPayload = decodeURIComponent(
+//             atob(base64)
+//                 .split("")
+//                 .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+//                 .join(""),
+//         )
+//         return JSON.parse(jsonPayload)
+//     } catch (error) {
+//         console.error("JWT Decode Error:", error)
+//         return null
+//     }
+// }
 
 const EmployeeListScreen = ({ route }) => {
     // Retrieve the status passed from the FaceEnrolled component
@@ -150,8 +150,6 @@ const EmployeeListScreen = ({ route }) => {
         </View>
     );
 };
-
-// --- Styles ---
 
 const styles = StyleSheet.create({
     container: {

@@ -9,10 +9,14 @@ import {
   endLocalSession,
   getSessionByLocalId,
   getAllLocationsForSession,
+  relocatePointsToSession,
 } from './OfflineLocationStore';
 
 let isSyncing = false;
 let syncPromise = null; // Store the sync promise to prevent concurrent syncs
+let netInfoListener = null; // Store NetInfo listener to prevent duplicates
+let lastSyncTime = 0; // Track last sync time for debouncing
+const SYNC_DEBOUNCE_MS = 5000; // Minimum 5 seconds between sync triggers
 
 export const isOnline = async () => {
   const state = await NetInfo.fetch();
@@ -26,13 +30,22 @@ export const syncPendingLocations = async () => {
     return syncPromise;
   }
 
+  // Debounce: prevent sync from being triggered too frequently
+  const now = Date.now();
+  if (now - lastSyncTime < SYNC_DEBOUNCE_MS) {
+    console.log('[SyncService] Sync debounced, last sync was', Math.round((now - lastSyncTime) / 1000), 'seconds ago');
+    return { success: false, synced: 0, reason: 'debounced' };
+  }
+
   const online = await isOnline();
   if (!online) {
     console.log('[SyncService] Offline, skipping sync');
     return { success: false, synced: 0, reason: 'offline' };
   }
 
+  // Set isSyncing BEFORE anything else to prevent race conditions
   isSyncing = true;
+  lastSyncTime = now;
   let totalSynced = 0;
 
   // Create the sync promise and store it to prevent concurrent syncs
@@ -42,7 +55,57 @@ export const syncPendingLocations = async () => {
       const sessionsWithUnsynced = await getAllSessionsWithUnsyncedLocations();
       console.log('[SyncService] Found sessions with unsynced locations:', sessionsWithUnsynced.length);
 
+      // Deduplicate sessions - if multiple sessions have similar start times (within 5 minutes),
+      // treat them as the same session and only create one server session
+      const deduplicatedSessions = [];
+      const processedStarts = new Map(); // Track start times to session mapping
+      const duplicateSessions = []; // Track duplicate sessions for point relocation
+      
       for (const { session, unsyncedCount } of sessionsWithUnsynced) {
+        const sessionStartTime = session.startTime;
+        
+        // Check if there's already a session being processed with a similar start time
+        let existingSession = null;
+        for (const [startTime, existing] of processedStarts) {
+          const timeDiff = Math.abs(sessionStartTime - startTime);
+          // If sessions are within 5 minutes of each other, consider them duplicates
+          if (timeDiff < 5 * 60 * 1000) {
+            existingSession = existing;
+            break;
+          }
+        }
+        
+        if (existingSession) {
+          console.log('[SyncService] Marking duplicate session:', session.localSessionId, 
+            '(within 5 min of existing session)', existingSession.localSessionId);
+          // Mark this session as a duplicate for point relocation
+          duplicateSessions.push({ duplicate: session, main: existingSession });
+        } else {
+          processedStarts.set(sessionStartTime, session);
+          deduplicatedSessions.push({ session, unsyncedCount });
+        }
+      }
+
+      // Relocate points from duplicate sessions to their main sessions
+      // This ensures all location data is synced to a single server session
+      for (const { duplicate, main } of duplicateSessions) {
+        console.log('[SyncService] Relocating points from duplicate session to main session');
+        const mainSessionInfo = await getSessionByLocalId(main.localSessionId);
+        if (mainSessionInfo?.serverSessionId) {
+          // If main session already has serverSessionId, relocate points to it
+          await relocatePointsToSession(duplicate.localSessionId, main.localSessionId);
+          console.log('[SyncService] Points relocated to session:', main.localSessionId);
+        } else {
+          // If main session doesn't have serverSessionId yet, relocate points anyway
+          // (they will be synced when the main session is processed)
+          await relocatePointsToSession(duplicate.localSessionId, main.localSessionId);
+          console.log('[SyncService] Points relocated, will sync with main session');
+        }
+      }
+
+      console.log('[SyncService] After deduplication:', deduplicatedSessions.length, 'sessions to process');
+
+      for (const { session, unsyncedCount } of deduplicatedSessions) {
         console.log('[SyncService] ===========================================');
         console.log('[SyncService] Processing session:', session.localSessionId);
         console.log('[SyncService] - unsyncedCount:', unsyncedCount);
@@ -53,7 +116,12 @@ export const syncPendingLocations = async () => {
         
         if (unsyncedCount === 0 && session.synced) continue;
 
-        let serverSessionId = session.serverSessionId;
+        // Re-fetch session from database to get the latest state
+        // This prevents creating duplicate server sessions if another sync process updated it
+        const currentSession = await getSessionByLocalId(session.localSessionId);
+        let serverSessionId = currentSession?.serverSessionId;
+        
+        console.log('[SyncService] Current serverSessionId after re-fetch:', serverSessionId);
 
         // If this session does not yet exist on the server (including
         // purely offline "local_*" sessions), create it now and link
@@ -63,8 +131,10 @@ export const syncPendingLocations = async () => {
           try {
             let photoFile = null;
             
+            // Use currentSession for photo URI since it might have been updated
+            const sessionForPhoto = currentSession || session;
             // Get punch-in photo from session record
-            const punchInPhotoUri = session.punchInPhotoUri;
+            const punchInPhotoUri = sessionForPhoto.punchInPhotoUri;
             console.log('[SyncService] Punch-in photo URI from session:', punchInPhotoUri);
             
             if (punchInPhotoUri) {
@@ -87,7 +157,8 @@ export const syncPendingLocations = async () => {
             } else {
               console.log('[SyncService] No punch-in photo in session, checking location points...');
               // Fallback: check location points for photo
-              const allLocations = await getAllLocationsForSession(session.localSessionId);
+              const sessionForLocations = currentSession || session;
+              const allLocations = await getAllLocationsForSession(sessionForLocations.localSessionId);
               const startPoint = allLocations.find(p => p.source === 'start' && p.photoUri) 
                 || (allLocations.length > 0 ? allLocations[0] : null);
               if (startPoint?.photoUri) {
@@ -216,21 +287,23 @@ export const syncPendingLocations = async () => {
         }
 
         // End the session on server if it was ended locally
-        if (session.status === 'ended') {
+        // Use currentSession to get the latest status
+        const sessionToEnd = currentSession || session;
+        if (sessionToEnd.status === 'ended') {
           console.log('[SyncService] Session is ended locally, ending on server...');
           
           // Try to get punch-out photo from session
           let punchOutPhoto = null;
-          if (session.punchOutPhotoUri) {
-            const photoPath = session.punchOutPhotoUri.startsWith('file://') 
-              ? session.punchOutPhotoUri.replace('file://', '') 
-              : session.punchOutPhotoUri;
+          if (sessionToEnd.punchOutPhotoUri) {
+            const photoPath = sessionToEnd.punchOutPhotoUri.startsWith('file://') 
+              ? sessionToEnd.punchOutPhotoUri.replace('file://', '') 
+              : sessionToEnd.punchOutPhotoUri;
             try {
               const photoFileExists = await RNFS.exists(photoPath);
               if (photoFileExists) {
                 punchOutPhoto = {
-                  uri: session.punchOutPhotoUri.startsWith('file://') ? session.punchOutPhotoUri : `file://${photoPath}`,
-                  fileName: session.punchOutPhotoUri.split('/').pop() || `punchout_${session.endTime}.jpg`,
+                  uri: sessionToEnd.punchOutPhotoUri.startsWith('file://') ? sessionToEnd.punchOutPhotoUri : `file://${photoPath}`,
+                  fileName: sessionToEnd.punchOutPhotoUri.split('/').pop() || `punchout_${sessionToEnd.endTime}.jpg`,
                   type: 'image/jpeg',
                 };
                 console.log('[SyncService] Found punch-out photo:', punchOutPhoto.fileName);
@@ -264,7 +337,12 @@ export const syncPendingLocations = async () => {
 };
 
 export const setupSyncOnReconnect = (onSyncComplete) => {
-  return NetInfo.addEventListener((state) => {
+  // Remove existing listener if present to prevent duplicate listeners
+  if (netInfoListener) {
+    netInfoListener();
+  }
+  
+  netInfoListener = NetInfo.addEventListener((state) => {
     if (state.isConnected && state.isInternetReachable !== false) {
       console.log('[SyncService] Network restored, triggering sync...');
       syncPendingLocations().then((result) => {
@@ -272,4 +350,21 @@ export const setupSyncOnReconnect = (onSyncComplete) => {
       });
     }
   });
+};
+
+// Cleanup function to remove NetInfo listener
+export const cleanupSyncListeners = () => {
+  if (netInfoListener) {
+    netInfoListener();
+    netInfoListener = null;
+    console.log('[SyncService] NetInfo listener cleaned up');
+  }
+};
+
+// Reset sync state - useful for recovering from stuck states
+export const resetSyncState = () => {
+  isSyncing = false;
+  syncPromise = null;
+  lastSyncTime = 0;
+  console.log('[SyncService] Sync state reset');
 };

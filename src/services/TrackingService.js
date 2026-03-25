@@ -643,7 +643,7 @@ export const addLocationWithPhotoOfflineFirst = async (sessionId, locationData, 
   return { success: true, storedOffline: true, synced: false };
 };
 
-export const endSessionOfflineFirst = async (sessionId, photoFile) => {
+export const endSessionOfflineFirst = async (sessionId, photoFile, locationData = null) => {
   const endTime = Date.now();
   
   // Save punch-out photo if provided
@@ -654,6 +654,52 @@ export const endSessionOfflineFirst = async (sessionId, photoFile) => {
       console.warn('Failed to save punch-out photo:', err?.message);
     }
   }
+  
+  // Save end location point if location data provided (for offline sessions)
+  // if (locationData && isLocalSessionId(sessionId)) {
+  //   try {
+  //     const { saveLocationPoint } = await import('./OfflineLocationStore');
+      
+  //     // Try to geocode the end location
+  //     let address = locationData.address || 'End Location';
+  //     let road = locationData.road || '';
+  //     let area = locationData.area || '';
+      
+  //     try {
+  //       const { geocodeLatLng } = await import('../utils/geocoding');
+  //       const geo = await geocodeLatLng(locationData.latitude, locationData.longitude);
+  //       if (geo) {
+  //         address = geo.address || address;
+  //         road = geo.road || road;
+  //         area = geo.area || area;
+  //       }
+  //     } catch (geoErr) {
+  //       console.log('[TrackingService] Could not geocode end location:', geoErr?.message);
+  //     }
+      
+  //     await saveLocationPoint({
+  //       sessionLocalId: sessionId,
+  //       latitude: locationData.latitude,
+  //       longitude: locationData.longitude,
+  //       timestamp: endTime,
+  //       address: address,
+  //       road: road,
+  //       area: area,
+  //       accuracy: locationData.accuracy || null,
+  //       heading: locationData.heading || null,
+  //       speed: locationData.speed || null,
+  //       batteryPercentage: locationData.batteryPercentage || null,
+  //       source: 'end',  // Mark as end location
+  //       remark: locationData.remark || null,
+  //       amount: locationData.amount || null,
+  //       photoUri: photoFile?.uri || null,
+  //       isOnline: false,
+  //     });
+  //     console.log('[TrackingService] Saved end location point with source=end');
+  //   } catch (err) {
+  //     console.warn('Failed to save end location point:', err?.message);
+  //   }
+  // }
   
   await endLocalSession(sessionId, endTime);
   if (isLocalSessionId(sessionId)) {

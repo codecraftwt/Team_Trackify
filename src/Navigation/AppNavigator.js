@@ -24,7 +24,7 @@ import SessionDetailMap from '../Screens/Admin/SessionDetailMap';
 import FullImageScreen from '../FullImageScreen';
 import { useAuth } from '../config/auth-context';
 import EmployeeListScreen from './../Screens/Admin/EmployeeListScreen';
-import NoInternetScreen from '../Screens/Nointernet/NoInternetScreen';
+// import NoInternetScreen from '../Screens/Nointernet/NoInternetScreen';
 import LocationTrackingScreen from '../Screens/Tracking/LocationTrackingScreen';
 import TrackingHistoryScreen from '../Screens/Tracking/TrackingHistoryScreen';
 import TrackingSessionDetailScreen from '../Screens/Tracking/TrackingSessionDetailScreen';
@@ -400,9 +400,9 @@ const AppNavigator = () => {
   };
   // Only block with NoInternetScreen when NOT authenticated (login requires network).
   // When authenticated, allow full app access so user can use Location Tracking offline.
-  if (!isAuthenticated && !isConnected) {
-    return <NoInternetScreen onTryAgain={handleTryAgain} />;
-  }
+  // if (!isAuthenticated && !isConnected) {
+  //   return <NoInternetScreen onTryAgain={handleTryAgain} />;
+  // }
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>

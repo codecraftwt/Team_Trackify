@@ -285,7 +285,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Poppins-Regular',
     color: '#3088C7',
-    // textDecorationLine: 'underline',
     backgroundColor:'#deeffb',
     padding: 6,
     borderRadius: 4,

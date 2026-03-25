@@ -349,7 +349,6 @@ const AdminReport = ({ navigation, route }) => {
     </View>
   );
 
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#3088C7" />
@@ -613,27 +612,6 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 15,
   },
-  statsRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 20,
-  },
-  statText: {
-    fontSize: 13,
-    fontFamily: 'Poppins-Regular',
-    color: '#666',
-    marginLeft: 4,
-  },
-
-  // ==========================================
-
   trackedUserCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -647,31 +625,19 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  trackedUserHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
   trackedUserDate: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
   },
-  trackedUserContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   trackedUserCount: {
     fontSize: 14,
     color: '#6B7280',
-    // marginLeft: 8,
   },
   rowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-
   rightSection: {
     flex: 1,
     flexDirection: 'row',
@@ -679,18 +645,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 12,
   },
-
   contentContainer: {
     flexDirection: 'column',
   },
-
   viewButton: {
     backgroundColor: '#E8F0FE',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 8,
   },
-
   viewButtonText: {
     color: '#3088C7',
     fontSize: 13,

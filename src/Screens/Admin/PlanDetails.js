@@ -560,39 +560,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8F9FA',
   },
-  backButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#f8f8f8',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    position: 'relative',
-  },
-  headerTitle: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-    fontSize: 20,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#333',
-  },
-  editButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#f8f8f8',
-  },
-  placeholder: {
-    width: 40,
-  },
+  // backButton: {
+  //   padding: 8,
+  //   borderRadius: 8,
+  //   backgroundColor: '#f8f8f8',
+  // },
+  // header: {
+  //   flexDirection: 'row',
+  //   alignItems: 'center',
+  //   justifyContent: 'flex-start',
+  //   paddingHorizontal: 16,
+  //   paddingVertical: 12,
+  //   backgroundColor: '#fff',
+  //   borderBottomWidth: 1,
+  //   borderBottomColor: '#f0f0f0',
+  //   position: 'relative',
+  // },
+  // headerTitle: {
+  //   position: 'absolute',
+  //   left: 0,
+  //   right: 0,
+  //   textAlign: 'center',
+  //   fontSize: 20,
+  //   fontFamily: 'Poppins-SemiBold',
+  //   color: '#333',
+  // },
+  // placeholder: {
+  //   width: 40,
+  // },
   content: {
     flex: 1,
   },
@@ -877,8 +872,5 @@ const styles = StyleSheet.create({
   buyButtonDisabled: {
     backgroundColor: '#CCC',
     shadowOpacity: 0,
-  },
-  editCustomPlanButtonContainer: {
-    marginTop: 8,
   },
 });

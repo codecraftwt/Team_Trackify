@@ -100,13 +100,20 @@ export const getUnsyncedSessions = async () => {
 };
 
 export const getAllSessionsWithUnsyncedLocations = async () => {
-  const sessions = await sessionsCollection().query().fetch();
+  // Only fetch sessions that need syncing - those with serverSessionId but unsynced points,
+  // OR those without serverSessionId that need to be created on server
+  const sessions = await sessionsCollection()
+    .query(Q.or(Q.where('server_session_id', null), Q.where('server_session_id', '')))
+    .fetch();
+  
   const result = [];
   for (const session of sessions) {
     const unsyncedCount = await locationsCollection()
       .query(Q.where('session_local_id', session.localSessionId), Q.where('synced', false))
       .fetchCount();
-    if (unsyncedCount > 0 || !session.synced) {
+    
+    // Only include sessions that have unsynced location points
+    if (unsyncedCount > 0) {
       result.push({ session, unsyncedCount });
     }
   }
@@ -119,6 +126,23 @@ export const markLocationSynced = async (locationId) => {
     await point.update((p) => {
       p.synced = true;
     });
+  });
+};
+
+// Move location points from one session to another (for deduplication)
+export const relocatePointsToSession = async (fromSessionLocalId, toSessionLocalId) => {
+  await database.write(async () => {
+    const points = await locationsCollection()
+      .query(Q.where('session_local_id', fromSessionLocalId))
+      .fetch();
+    
+    for (const point of points) {
+      await point.update((p) => {
+        p.sessionLocalId = toSessionLocalId;
+      });
+    }
+    
+    console.log('[OfflineLocationStore] Relocated', points.length, 'points from', fromSessionLocalId, 'to', toSessionLocalId);
   });
 };
 

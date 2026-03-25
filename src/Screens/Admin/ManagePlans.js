@@ -565,7 +565,7 @@ import {
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   getAllPlans,
   getUserSubscriptionStatus,
@@ -573,7 +573,6 @@ import {
   getUserCustomPlan,
   createCustomPlan,
   updateCustomPlan,
-  deleteCustomPlan,
 } from '../../services/PlansService';
 
 export default function ManagePlans() {
@@ -614,7 +613,7 @@ export default function ManagePlans() {
     try {
       setLoadingCustomPlan(true);
       const result = await getUserCustomPlan();
-      console.log("Custom plan fetched:", result);
+      // console.log("Custom plan fetched:", result);
       
       // Handle different response formats
       let planData = null;
@@ -764,34 +763,6 @@ export default function ManagePlans() {
     } finally {
       setSavingCustomPlan(false);
     }
-  };
-
-  // Handle delete custom plan
-  const handleDeleteCustomPlan = () => {
-    Alert.alert(
-      'Delete Custom Plan',
-      'Are you sure you want to delete your custom plan? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setDeletingCustomPlan(true);
-              await deleteCustomPlan(customPlan._id);
-              Alert.alert('Success', 'Custom plan deleted successfully!');
-              setCustomPlan(null);
-              await fetchCustomPlan();
-            } catch (error) {
-              Alert.alert('Error', error.message || 'Failed to delete custom plan');
-            } finally {
-              setDeletingCustomPlan(false);
-            }
-          }
-        }
-      ]
-    );
   };
 
   // Fetch data on mount
@@ -1099,23 +1070,6 @@ export default function ManagePlans() {
                       <Icon name="edit" size={14} color="#9C27B0" />
                       <Text style={styles.editCustomPlanText}>Edit</Text>
                     </TouchableOpacity>
-                    {/* <TouchableOpacity
-                      style={styles.deleteCustomPlanButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCustomPlan();
-                      }}
-                      disabled={deletingCustomPlan}
-                    >
-                      {deletingCustomPlan ? (
-                        <ActivityIndicator size="small" color="#E74C3C" />
-                      ) : (
-                        <>
-                          <Icon name="delete" size={14} color="#E74C3C" />
-                          <Text style={styles.deleteCustomPlanText}>Delete</Text>
-                        </>
-                      )}
-                    </TouchableOpacity> */}
                   </View>
                 </View>
               </TouchableOpacity>
@@ -1525,16 +1479,6 @@ const styles = StyleSheet.create({
   editCustomPlanText: {
     fontSize: 12,
     color: '#9C27B0',
-    fontFamily: 'Rubik-Medium',
-    marginLeft: 4,
-  },
-  deleteCustomPlanButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  deleteCustomPlanText: {
-    fontSize: 12,
-    color: '#E74C3C',
     fontFamily: 'Rubik-Medium',
     marginLeft: 4,
   },

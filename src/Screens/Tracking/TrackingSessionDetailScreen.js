@@ -165,6 +165,10 @@ const TrackingSessionDetailScreen = () => {
   const [alertConfig, setAlertConfig] = useState({ title: '', message: '', type: 'error' });
   const mapRef = React.useRef(null);
 
+  // Modal state for marker details
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedMarker, setSelectedMarker] = useState(null);
+
   const load = useCallback(async () => {
     if (!sessionId) return;
     setLoading(true);
@@ -245,15 +249,15 @@ const TrackingSessionDetailScreen = () => {
 
   const startCoordinate =
     coordinates.length > 0 &&
-    Number.isFinite(coordinates[0].latitude) &&
-    Number.isFinite(coordinates[0].longitude)
+      Number.isFinite(coordinates[0].latitude) &&
+      Number.isFinite(coordinates[0].longitude)
       ? coordinates[0]
       : null;
 
   const endCoordinate =
     coordinates.length > 0 &&
-    Number.isFinite(coordinates[coordinates.length - 1].latitude) &&
-    Number.isFinite(coordinates[coordinates.length - 1].longitude)
+      Number.isFinite(coordinates[coordinates.length - 1].latitude) &&
+      Number.isFinite(coordinates[coordinates.length - 1].longitude)
       ? coordinates[coordinates.length - 1]
       : null;
 
@@ -270,12 +274,57 @@ const TrackingSessionDetailScreen = () => {
     [sortedLocationsWithCoords]
   );
 
+  // Find the end location (source === 'end')
+  const endLocation = locations.find((l) => l?.source === 'end');
+
+  // If no end location found by source, use the last location (sorted by timestamp)
+  const endFromLastPoint = sortedLocationsWithCoords.length > 0
+    ? sortedLocationsWithCoords[sortedLocationsWithCoords.length - 1]
+    : null;
+
+  const finalEndLocation = endLocation || endFromLastPoint;
+
   const photoLocations = locations.filter(
     (l) =>
       (l?.photoUrl ?? l?.photo ?? l?.photoPath ?? l?.photoUri) &&
       l?.latitude != null &&
       l?.longitude != null
   );
+
+  // Handle marker press to show modal
+  const handleMarkerPress = useCallback((markerType, location) => {
+    if (!location) return;
+
+    // Get photo URI from various possible fields
+    const rawPhotoUri = location.photoUri || location.photoUrl || location.photo || location.photoPath || null;
+
+    // Build the proper photo URL
+    let photoUrl = null;
+    if (rawPhotoUri) {
+      if (rawPhotoUri.startsWith('file://') || rawPhotoUri.startsWith('/')) {
+        photoUrl = rawPhotoUri.startsWith('file://') ? rawPhotoUri : `file://${rawPhotoUri}`;
+      } else if (rawPhotoUri.startsWith('http://') || rawPhotoUri.startsWith('https://')) {
+        photoUrl = rawPhotoUri;
+      } else {
+        // Relative path - prepend base URL
+        const base = (Api?.defaults?.baseURL || '').replace(/\/+$/, '');
+        photoUrl = `${base}/${rawPhotoUri}`;
+      }
+    }
+
+    const markerData = {
+      type: markerType,
+      latitude: Number(location.latitude),
+      longitude: Number(location.longitude),
+      timestamp: location.timestamp,
+      photoUri: rawPhotoUri,
+      photoUrl: photoUrl,  // Pre-built URL for display
+      remark: location.remark,
+      source: location.source,
+    };
+    setSelectedMarker(markerData);
+    setModalVisible(true);
+  }, [setSelectedMarker, setModalVisible]);
 
   const renderRouteMarkers = (keyPrefix) => (
     <>
@@ -285,16 +334,23 @@ const TrackingSessionDetailScreen = () => {
           coordinate={startCoordinate}
           pinColor="green"
           title="Start"
+          description={sortedLocationsWithCoords[0] ? new Date(normalizeTimestamp(sortedLocationsWithCoords[0].timestamp)).toLocaleString() : 'Start point'}
           zIndex={1000}
+          onPress={() => handleMarkerPress('start', sortedLocationsWithCoords[0])}
         />
       )}
-      {endCoordinate && (
+      {finalEndLocation && (
         <Marker
           key={`${keyPrefix}-end`}
-          coordinate={endCoordinate}
+          coordinate={{
+            latitude: Number(finalEndLocation.latitude),
+            longitude: Number(finalEndLocation.longitude),
+          }}
           pinColor="#FF8C00"
           title="End"
+          description={new Date(normalizeTimestamp(finalEndLocation.timestamp)).toLocaleString()}
           zIndex={1001}
+          onPress={() => handleMarkerPress('end', finalEndLocation)}
         />
       )}
       {photoLocations.map((loc, idx) => (
@@ -309,6 +365,7 @@ const TrackingSessionDetailScreen = () => {
           description={
             loc.remark != null ? String(loc.remark).trim() || undefined : undefined
           }
+          onPress={() => handleMarkerPress('photo', loc)}
         />
       ))}
     </>
@@ -382,11 +439,11 @@ const TrackingSessionDetailScreen = () => {
 
   const region = coordinates.length
     ? {
-        latitude: coordinates[0].latitude,
-        longitude: coordinates[0].longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }
+      latitude: coordinates[0].latitude,
+      longitude: coordinates[0].longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    }
     : null;
 
   const userName = detail?.userName || detail?.employeeName || '';
@@ -493,6 +550,75 @@ const TrackingSessionDetailScreen = () => {
         </View>
       )}
 
+      {/* Marker Detail Modal */}
+      {modalVisible && selectedMarker && (
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setModalVisible(false)}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {selectedMarker.type === 'start' ? 'Start Location' :
+                  selectedMarker.type === 'end' ? 'End Location' : 'Photo Location'}
+              </Text>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setModalVisible(false)}
+              >
+                <Icon name="times" size={20} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedMarker.photoUrl ? (
+              <Image
+                source={{ uri: selectedMarker.photoUrl }}
+                style={styles.modalImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.modalNoImage}>
+                <Icon name="map-marker" size={48} color="#9ca3af" />
+              </View>
+            )}
+
+            <View style={styles.modalInfo}>
+              <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>Time:</Text>
+                <Text style={styles.modalValue}>
+                  {selectedMarker.timestamp
+                    ? new Date(normalizeTimestamp(selectedMarker.timestamp)).toLocaleString()
+                    : 'N/A'}
+                </Text>
+              </View>
+
+              {selectedMarker.remark && (
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Remark:</Text>
+                  <Text style={styles.modalValue}>{selectedMarker.remark}</Text>
+                </View>
+              )}
+
+              <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>Coordinates:</Text>
+                <Text style={styles.modalValue}>
+                  {selectedMarker.latitude?.toFixed(6)}, {selectedMarker.longitude?.toFixed(6)}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalDoneBtn}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.modalDoneBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <FancyAlert
         visible={alertVisible}
         onClose={() => setAlertVisible(false)}
@@ -545,76 +671,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#e5e7eb',
   },
-  mapWrap: {
-    width: width,
-    height: hp(40),
-    borderRadius: 0,
-    overflow: 'hidden',
-    marginTop: 0,
-    position: 'relative',
-  },
   map: {
     width: '100%',
     height: '100%',
-  },
-  mapFullScreenBtn: {
-    position: 'absolute',
-    right: 8,
-    bottom: 8,
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  fullScreenMiniBtn: {
-    position: 'absolute',
-    right: 12,
-    bottom: 24,
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    zIndex: 10,
-  },
-  fullScreenMapContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  fullScreenCloseBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 40,
-    left: 16,
-    zIndex: 10,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: wp(4),
-    marginTop: hp(2),
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  cardTitle: {
-    fontSize: wp(4.5),
-    fontWeight: '600',
-    color: '#111',
-    marginBottom: hp(1.5),
   },
   row: {
     flexDirection: 'row',
@@ -632,119 +691,42 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#111',
   },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#C6303E',
-    paddingVertical: hp(1.5),
-    borderRadius: 8,
-    marginTop: hp(3),
-  },
-  deleteBtnDisabled: {
-    opacity: 0.6,
-  },
-  deleteIcon: {
-    marginRight: 8,
-  },
-  deleteBtnText: {
-    fontSize: wp(4),
-    fontWeight: '600',
-    color: '#fff',
-  },
-  photoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: hp(1),
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
-  },
-  photoThumbWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 8,
-    overflow: 'hidden',
-    marginRight: wp(3),
-  },
-  photoThumb: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#e5e7eb',
-  },
-  photoPlaceholder: {
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoInfo: {
-    flex: 1,
-  },
-  photoRemark: {
-    fontSize: wp(3.6),
-    color: '#374151',
-    marginBottom: hp(0.3),
-  },
-  photoAmount: {
-    fontSize: wp(3.2),
-    color: '#6b7280',
-  },
-  photoCoords: {
-    marginTop: hp(0.2),
-    fontSize: wp(3.1),
-    color: '#4b5563',
-  },
-  photoCarouselWrap: {
-    marginTop: hp(2),
-  },
   photoCarouselContent: {
     paddingHorizontal: wp(2),
   },
-  // =============
-photoCard: {
-  width: wp(40),               // smaller square card
-  backgroundColor: '#ffffff',
-  // borderRadius: 16,            // rounded corners
-  paddingVertical: hp(2),      // space inside top/bottom
-  alignItems: 'center',        // center items horizontally
-  marginHorizontal: wp(2),     // horizontal gap between cards
-  marginVertical: hp(3),       
-  // shadowColor: '#000',
-  // shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.1,
-  shadowRadius: 4,
-  elevation: 3,
-},
-
-photoCardImage: {
-  width: wp(18),               // circular image
-  height: wp(18),
-  borderRadius: wp(9),         // half of width for perfect circle
-  backgroundColor: '#f3f4f6',
-  overflow: 'hidden',
-  marginBottom: hp(1.5),       // space between image and text
-},
-
-photoCardInfo: {
-  alignItems: 'center',        // center text horizontally
-},
-
-photoCardLabelTitle: {
-  fontSize: wp(3),
-  fontWeight: '600',
-  color: '#111827',
-  textAlign: 'center',
-},
-
-photoCardLabelValue: {
-  fontSize: wp(3),
-  color: '#4b5563',
-  textAlign: 'center',
-  marginTop: hp(0.5),          // small gap under title
-},
-// 
-  photoAvatar: {
-    width: '100%',
-    height: '100%',
+  photoCard: {
+    width: wp(40),
+    backgroundColor: '#ffffff',
+    paddingVertical: hp(2),
+    alignItems: 'center',
+    marginHorizontal: wp(2),
+    marginVertical: hp(3),
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  photoCardImage: {
+    width: wp(18),
+    height: wp(18),
+    borderRadius: wp(9),
+    backgroundColor: '#f3f4f6',
+    overflow: 'hidden',
+    marginBottom: hp(1.5),
+  },
+  photoCardInfo: {
+    alignItems: 'center',
+  },
+  photoCardLabelTitle: {
+    fontSize: wp(3),
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  photoCardLabelValue: {
+    fontSize: wp(3),
+    color: '#4b5563',
+    textAlign: 'center',
+    marginTop: hp(0.5),          // small gap under title
   },
   photoAvatarPlaceholder: {
     width: '100%',
@@ -752,26 +734,102 @@ photoCardLabelValue: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  photoCardLabel: {
-    marginTop: hp(0.5),
-    fontSize: wp(3.1),
-    color: '#4b5563',
-    textAlign: 'center',
-  },
-  mapFullScreen: {
-    flex: 1,
-    position: 'relative',
-  },
   photoCarouselSection: {
     flex: 3,
     paddingVertical: hp(0.5),
   },
-  photoOverlay: {
+  // Modal styles
+  modalOverlay: {
     position: 'absolute',
-    bottom: hp(1.5),
+    top: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: wp(3),
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: wp(85),
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: wp(4),
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: hp(2),
+  },
+  modalTitle: {
+    fontSize: wp(5),
+    fontWeight: '600',
+    color: '#111827',
+  },
+  modalCloseBtn: {
+    padding: wp(2),
+  },
+  modalImage: {
+    width: '100%',
+    height: hp(25),
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+    marginBottom: hp(2),
+  },
+  modalNoImage: {
+    width: '100%',
+    height: hp(20),
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: hp(2),
+  },
+  modalInfo: {
+    marginBottom: hp(2),
+  },
+  modalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: hp(1),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalLabel: {
+    fontSize: wp(4),
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  modalValue: {
+    fontSize: wp(4),
+    color: '#111827',
+    flex: 1,
+    textAlign: 'right',
+  },
+  modalDoneBtn: {
+    backgroundColor: '#438AFF',
+    paddingVertical: hp(1.5),
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: hp(1),
+  },
+  modalDoneBtnText: {
+    color: '#ffffff',
+    fontSize: wp(4.5),
+    fontWeight: '600',
   },
 });
 

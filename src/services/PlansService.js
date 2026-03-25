@@ -2,8 +2,8 @@ import Api from '../config/Api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Razorpay Key
-export const RAZORPAY_KEY = 'rzp_test_SN1JoYwhNqRjPV';
-// export const RAZORPAY_KEY = "rzp_live_0fMe7hBqXJktWH"
+// export const RAZORPAY_KEY = 'rzp_test_SN1JoYwhNqRjPV';
+export const RAZORPAY_KEY = "rzp_live_0fMe7hBqXJktWH"
 
 /**
  * Get admin ID from AsyncStorage
