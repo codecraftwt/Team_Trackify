@@ -503,7 +503,7 @@ const LocationTrackingScreen = () => {
 
   const sendLocationPoint = useCallback(async (location, source = 'foreground') => {
     const sessionId = sessionIdRef.current;
-    
+
     // CRITICAL: Check if tracking is still active before sending location
     // This prevents locations from being sent after punch out
     if (!sessionId || !location || !trackingRef.current) {
@@ -615,7 +615,7 @@ const LocationTrackingScreen = () => {
         stopForegroundTimers();
         return;
       }
-      
+
       // Additional check: ensure session is still valid
       if (!sessionIdRef.current) {
         stopForegroundTimers();
@@ -653,12 +653,12 @@ const LocationTrackingScreen = () => {
     // This must happen BEFORE stopping services and capturing photo
     trackingRef.current = false;
     setIsTracking(false);
-    
+
     // CRITICAL: Clear session ID immediately to block ALL location sending
     // This ensures no location can be sent after punch out, even if other checks fail
     const sessionIdToEnd = sessionIdRef.current;
     sessionIdRef.current = null;
-    
+
     // End tracking requires a photo (Punch Out).
     setLoading(true);
     stopForegroundTimers();
@@ -715,17 +715,30 @@ const LocationTrackingScreen = () => {
       // IMPORTANT: Do NOT sync buffered native points when ending session
       // These are old locations that would incorrectly add to the distance
       await syncNativeBufferedPointsForSession(sessionId);
-      
+
       await TrackingService.endSessionOfflineFirst(sessionIdToEnd, endPhotoFile);
       await AsyncStorage.removeItem(LAST_SESSION_KEY);
-      
+
       // Do NOT sync pending locations when ending - they would add more distance
       void syncPendingLocations().catch(() => undefined);
-      
+
       await loadSessionLocations(sessionIdToEnd, true);
 
-      navigation.navigate('TrackingSessionDetail', { sessionId: sessionIdToEnd });
-      showAlert('Tracking Stopped', 'Session saved successfully.', 'success');
+      // navigation.navigate('TrackingSessionDetail', { sessionId: sessionIdToEnd });
+      // showAlert('Tracking Stopped', 'Session saved successfully.', 'success');
+      Alert.alert(
+        'Tracking Stopped',
+        'Session saved successfully.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.navigate('TrackingSessionDetail', { sessionId: sessionIdToEnd });
+            },
+          },
+        ],
+        { cancelable: false } // Prevent dismissing by tapping outside
+      );
     } catch (error) {
       showAlert(
         'Warning',
