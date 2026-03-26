@@ -182,9 +182,69 @@ const TrackingSessionDetailScreen = () => {
       try {
         const localLocations = await getAllLocationsForSession(sessionId);
         if (Array.isArray(localLocations) && localLocations.length > 0) {
-          enriched = {
-            ...data,
-            locations: localLocations.map((p) => ({
+          // IMPORTANT:
+          // Keep server location fields (especially `photo` / `photoUrl`) so the
+          // Start marker modal can display the correct image.
+          // We only overlay coordinate/meta fields and isOnline from offline DB.
+          const roundKey = (n, digits = 6) => {
+            const x = Number(n);
+            if (!Number.isFinite(x)) return null;
+            return x.toFixed(digits);
+          };
+
+          const makeKey = (p) => {
+            const latKey = roundKey(p?.latitude);
+            const lngKey = roundKey(p?.longitude);
+            if (!latKey || !lngKey) return null;
+            const ts = normalizeTimestamp(p?.timestamp ?? p?.time ?? p?.createdAt);
+            return `${latKey}|${lngKey}|${ts}`;
+          };
+
+          const localByKey = new Map(
+            localLocations
+              .map((p) => {
+                const key = makeKey(p);
+                return key ? [key, p] : null;
+              })
+              .filter(Boolean),
+          );
+
+          const usedLocalKeys = new Set();
+
+          const serverLocations = Array.isArray(data?.locations) ? data.locations : [];
+          const merged = serverLocations.map((serverLoc) => {
+            const key = makeKey(serverLoc);
+            const match = key ? localByKey.get(key) : null;
+            if (!match) return serverLoc;
+
+            if (key) usedLocalKeys.add(key);
+
+            return {
+              ...serverLoc, // preserve `photo`, `photoUrl`, etc.
+              latitude: match.latitude,
+              longitude: match.longitude,
+              timestamp: match.timestamp,
+              address: match.address ?? serverLoc.address,
+              road: match.road ?? serverLoc.road,
+              area: match.area ?? serverLoc.area,
+              accuracy: match.accuracy ?? serverLoc.accuracy,
+              heading: match.heading ?? serverLoc.heading,
+              speed: match.speed ?? serverLoc.speed,
+              batteryPercentage: match.batteryPercentage ?? serverLoc.batteryPercentage,
+              source: match.source ?? serverLoc.source,
+              remark: match.remark ?? serverLoc.remark,
+              amount: match.amount ?? serverLoc.amount,
+              photoUri: match.photoUri ?? serverLoc.photoUri,
+              isOnline: match.isOnline ?? serverLoc.isOnline,
+            };
+          });
+
+          // Add any local-only points (not present in server response),
+          // so offline photos don't disappear.
+          for (const p of localLocations) {
+            const key = makeKey(p);
+            if (!key || usedLocalKeys.has(key)) continue;
+            merged.push({
               id: p.id,
               latitude: p.latitude,
               longitude: p.longitude,
@@ -201,8 +261,10 @@ const TrackingSessionDetailScreen = () => {
               amount: p.amount,
               photoUri: p.photoUri,
               isOnline: p.isOnline ?? false,
-            })),
-          };
+            });
+          }
+
+          enriched = { ...data, locations: merged };
         }
       } catch (offlineError) {
         console.warn(
@@ -231,8 +293,9 @@ const TrackingSessionDetailScreen = () => {
 
   const locations = detail?.locations ?? [];
 
-  // Normalise & sort locations so that index 0 is the true start
-  // (earliest timestamp) and the last index is the true end.
+  // Normalise & sort locations so that first point is the true start
+  // Find start location (source === 'start') or use earliest timestamp
+  const startLocationFromSource = locations.find((l) => l?.source === 'start');
   const locationsWithCoords = locations.filter(
     (l) => l?.latitude != null && l?.longitude != null
   );
@@ -242,17 +305,37 @@ const TrackingSessionDetailScreen = () => {
     return ta - tb;
   });
 
+  // Use source='start' location if available, otherwise use the first sorted location
+  // Also, if there's a location with photo, prefer that for the start marker
+  const startLocationWithPhoto = locations.find(
+    (l) => l?.photo || l?.photoUrl || l?.photoUri || l?.photoPath
+  );
+  
+  // Determine the actual start location to display: prefer source='start', then any location with photo, then first by timestamp
+  let startLocation = startLocationFromSource || startLocationWithPhoto || (sortedLocationsWithCoords.length > 0 ? sortedLocationsWithCoords[0] : null);
+
+  // If startLocation has no photo but there's another location with photo that has similar timestamp,
+  // use that photo location instead
+  const hasPhotoInStart = startLocation?.photo || startLocation?.photoUrl || startLocation?.photoUri || startLocation?.photoPath;
+  if (!hasPhotoInStart && startLocationWithPhoto && startLocationWithPhoto !== startLocation) {
+    // Use the photo from the photo location but keep start location's coordinates/timestamp
+    startLocation = {
+      ...startLocation,
+      photo: startLocationWithPhoto.photo,
+      photoUrl: startLocationWithPhoto.photoUrl,
+      photoUri: startLocationWithPhoto.photoUri,
+      photoPath: startLocationWithPhoto.photoPath,
+    };
+  }
+
   const coordinates = sortedLocationsWithCoords.map((l) => ({
     latitude: Number(l.latitude),
     longitude: Number(l.longitude),
   }));
 
-  const startCoordinate =
-    coordinates.length > 0 &&
-      Number.isFinite(coordinates[0].latitude) &&
-      Number.isFinite(coordinates[0].longitude)
-      ? coordinates[0]
-      : null;
+  const startCoordinate = startLocation
+    ? { latitude: Number(startLocation.latitude), longitude: Number(startLocation.longitude) }
+    : null;
 
   const endCoordinate =
     coordinates.length > 0 &&
@@ -282,35 +365,118 @@ const TrackingSessionDetailScreen = () => {
     ? sortedLocationsWithCoords[sortedLocationsWithCoords.length - 1]
     : null;
 
-  const finalEndLocation = endLocation || endFromLastPoint;
+  // Find any location with a photo that could be the end location
+  // Priority: source='end' > any location with photo > last point by timestamp
+  const endLocationWithPhoto = locations.find(
+    (l) => (l?.photo || l?.photoUrl || l?.photoUri || l?.photoPath) && l?.source !== 'start'
+  );
+
+  // Determine final end location - prefer source='end', then any photo location, then last point
+  let finalEndLocation = endLocation || endFromLastPoint;
+
+  // If final end location has no photo but there's a photo location that's not the start,
+  // use that photo for the end marker
+  const hasPhotoInEnd = finalEndLocation?.photo || finalEndLocation?.photoUrl || finalEndLocation?.photoUri || finalEndLocation?.photoPath;
+  if (!hasPhotoInEnd && endLocationWithPhoto && endLocationWithPhoto !== startLocation) {
+    finalEndLocation = {
+      ...finalEndLocation,
+      photo: endLocationWithPhoto.photo,
+      photoUrl: endLocationWithPhoto.photoUrl,
+      photoUri: endLocationWithPhoto.photoUri,
+      photoPath: endLocationWithPhoto.photoPath,
+    };
+  }
 
   const photoLocations = locations.filter(
     (l) =>
-      (l?.photoUrl ?? l?.photo ?? l?.photoPath ?? l?.photoUri) &&
+      (l?.photoUrl || l?.photo || l?.photoPath || l?.photoUri) && // Check all possible photo fields
       l?.latitude != null &&
       l?.longitude != null
   );
 
   // Handle marker press to show modal
+  // const handleMarkerPress = useCallback((markerType, location) => {
+  //   if (!location) return;
+
+  //   // Get photo URI from various possible fields
+  //   const rawPhotoUri = location.photoUri || location.photoUrl || location.photo || location.photoPath || null;
+
+  //   // Build the proper photo URL
+  //   let photoUrl = null;
+  //   if (rawPhotoUri) {
+  //     if (rawPhotoUri.startsWith('file://') || rawPhotoUri.startsWith('/')) {
+  //       photoUrl = rawPhotoUri.startsWith('file://') ? rawPhotoUri : `file://${rawPhotoUri}`;
+  //     } else if (rawPhotoUri.startsWith('http://') || rawPhotoUri.startsWith('https://')) {
+  //       photoUrl = rawPhotoUri;
+  //     } else {
+  //       // Relative path - prepend base URL
+  //       const base = (Api?.defaults?.baseURL || '').replace(/\/+$/, '');
+  //       photoUrl = `${base}/${rawPhotoUri}`;
+  //     }
+  //   }
+
+  //   const markerData = {
+  //     type: markerType,
+  //     latitude: Number(location.latitude),
+  //     longitude: Number(location.longitude),
+  //     timestamp: location.timestamp,
+  //     photoUri: rawPhotoUri,
+  //     photoUrl: photoUrl,  // Pre-built URL for display
+  //     remark: location.remark,
+  //     source: location.source,
+  //   };
+  //   setSelectedMarker(markerData);
+  //   setModalVisible(true);
+  // }, [setSelectedMarker, setModalVisible]);
   const handleMarkerPress = useCallback((markerType, location) => {
     if (!location) return;
 
-    // Get photo URI from various possible fields
-    const rawPhotoUri = location.photoUri || location.photoUrl || location.photo || location.photoPath || null;
+    // Debug log to see what we're receiving
+    console.log('Marker pressed - location data:', {
+      photo: location.photo,
+      photoUri: location.photoUri,
+      photoUrl: location.photoUrl,
+      hasPhoto: !!(location.photo || location.photoUri || location.photoUrl),
+      location
+    });
+
+    // Get photo URI from various possible fields (prioritize 'photo' as it's most common)
+    let rawPhotoUri = null;
+    if (location.photo) {
+      rawPhotoUri = location.photo;
+    } else if (location.photoUri) {
+      rawPhotoUri = location.photoUri;
+    } else if (location.photoUrl) {
+      rawPhotoUri = location.photoUrl;
+    } else if (location.photoPath) {
+      rawPhotoUri = location.photoPath;
+    }
 
     // Build the proper photo URL
     let photoUrl = null;
     if (rawPhotoUri) {
-      if (rawPhotoUri.startsWith('file://') || rawPhotoUri.startsWith('/')) {
-        photoUrl = rawPhotoUri.startsWith('file://') ? rawPhotoUri : `file://${rawPhotoUri}`;
-      } else if (rawPhotoUri.startsWith('http://') || rawPhotoUri.startsWith('https://')) {
+      // Make modal image loading resilient to string whitespace / unexpected types.
+      rawPhotoUri =
+        typeof rawPhotoUri === 'string' ? rawPhotoUri.trim() : String(rawPhotoUri).trim();
+      if (!rawPhotoUri) rawPhotoUri = null;
+    }
+    if (rawPhotoUri) {
+      // Check if it's already a full URL
+      if (rawPhotoUri.startsWith('http://') || rawPhotoUri.startsWith('https://')) {
         photoUrl = rawPhotoUri;
-      } else {
-        // Relative path - prepend base URL
+      }
+      // Check if it's a local file path
+      else if (rawPhotoUri.startsWith('file://') || rawPhotoUri.startsWith('/')) {
+        photoUrl = rawPhotoUri.startsWith('file://') ? rawPhotoUri : `file://${rawPhotoUri}`;
+      }
+      // Relative path - prepend base URL
+      else {
         const base = (Api?.defaults?.baseURL || '').replace(/\/+$/, '');
         photoUrl = `${base}/${rawPhotoUri}`;
       }
     }
+
+    console.log('Built photo URL:', photoUrl);
 
     const markerData = {
       type: markerType,
@@ -322,55 +488,64 @@ const TrackingSessionDetailScreen = () => {
       remark: location.remark,
       source: location.source,
     };
+
     setSelectedMarker(markerData);
     setModalVisible(true);
   }, [setSelectedMarker, setModalVisible]);
 
-  const renderRouteMarkers = (keyPrefix) => (
-    <>
-      {startCoordinate && (
-        <Marker
-          key={`${keyPrefix}-start`}
-          coordinate={startCoordinate}
-          pinColor="green"
-          title="Start"
-          description={sortedLocationsWithCoords[0] ? new Date(normalizeTimestamp(sortedLocationsWithCoords[0].timestamp)).toLocaleString() : 'Start point'}
-          zIndex={1000}
-          onPress={() => handleMarkerPress('start', sortedLocationsWithCoords[0])}
-        />
-      )}
-      {finalEndLocation && (
-        <Marker
-          key={`${keyPrefix}-end`}
-          coordinate={{
-            latitude: Number(finalEndLocation.latitude),
-            longitude: Number(finalEndLocation.longitude),
-          }}
-          // pinColor="#FF8C00"
-          pincolor="red"
-          title="End"
-          description={new Date(normalizeTimestamp(finalEndLocation.timestamp)).toLocaleString()}
-          zIndex={1001}
-          onPress={() => handleMarkerPress('end', finalEndLocation)}
-        />
-      )}
-      {photoLocations.map((loc, idx) => (
-        <Marker
-          key={loc.id ?? `${keyPrefix}-photo-${idx}`}
-          coordinate={{
-            latitude: Number(loc.latitude),
-            longitude: Number(loc.longitude),
-          }}
-          pinColor="#FF8C00"
-          title="Photo Location"
-          description={
-            loc.remark != null ? String(loc.remark).trim() || undefined : undefined
-          }
-          onPress={() => handleMarkerPress('photo', loc)}
-        />
-      ))}
-    </>
-  );
+const renderRouteMarkers = (keyPrefix) => (
+  <>
+    {startCoordinate && (
+      <Marker
+        key={`${keyPrefix}-start`}
+        coordinate={startCoordinate}
+        pinColor="green"
+        title="Start"
+        description={startLocation ? new Date(normalizeTimestamp(startLocation.timestamp)).toLocaleString() : 'Start point'}
+        zIndex={1000}
+        onPress={() => {
+          console.log('Start marker pressed - location data:', startLocation);
+          handleMarkerPress('start', startLocation);
+        }}
+      />
+    )}
+    {finalEndLocation && (
+      <Marker
+        key={`${keyPrefix}-end`}
+        coordinate={{
+          latitude: Number(finalEndLocation.latitude),
+          longitude: Number(finalEndLocation.longitude),
+        }}
+        pinColor="red"
+        title="End"
+        description={new Date(normalizeTimestamp(finalEndLocation.timestamp)).toLocaleString()}
+        zIndex={1001}
+        onPress={() => {
+          console.log('End marker pressed - location data:', finalEndLocation);
+          handleMarkerPress('end', finalEndLocation);
+        }}
+      />
+    )}
+    {photoLocations.map((loc, idx) => (
+      <Marker
+        key={loc.id ?? `${keyPrefix}-photo-${idx}`}
+        coordinate={{
+          latitude: Number(loc.latitude),
+          longitude: Number(loc.longitude),
+        }}
+        pinColor="#FF8C00"
+        title="Photo Location"
+        description={
+          loc.remark != null ? String(loc.remark).trim() || undefined : undefined
+        }
+        onPress={() => {
+          console.log('Photo marker pressed - location data:', loc);
+          handleMarkerPress('photo', loc);
+        }}
+      />
+    ))}
+  </>
+);
 
   const locationsWithPhotoOrRemark = locations.filter(
     (l) =>

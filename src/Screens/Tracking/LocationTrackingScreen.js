@@ -661,11 +661,15 @@ const LocationTrackingScreen = () => {
 
     // End tracking requires a photo (Punch Out).
     setLoading(true);
-    stopForegroundTimers();
-
-    // Pause background uploads immediately so we don't keep writing points
-    // while the user is in the punch-out photo flow.
+    
+    // CRITICAL: Stop background services IMMEDIATELY before photo capture
+    // This prevents any locations from being sent while user is taking punch-out photo
     punchOutPausedServicesRef.current = true;
+    
+    // Stop foreground timers FIRST to prevent any new location requests
+    stopForegroundTimers();
+    
+    // Stop background job immediately - this signals the task to stop
     try {
       await stopBackgroundLocationJob();
     } catch {
@@ -679,13 +683,14 @@ const LocationTrackingScreen = () => {
 
     const endPhotoFile = await captureCameraPhoto('punch_out');
     if (!endPhotoFile?.uri) {
-      // Photo is required; resume timers and keep tracking active.
-      punchOutPausedServicesRef.current = false;
-      // Restore tracking state since photo was not captured
-      trackingRef.current = true;
-      sessionIdRef.current = sessionIdToEnd; // Restore session ID
-      setIsTracking(true);
-      if (sessionIdRef.current) {
+      // Photo is required; resume tracking state if possible
+      if (sessionIdToEnd) {
+        // Try to restore tracking - this is a recovery scenario
+        punchOutPausedServicesRef.current = false;
+        trackingRef.current = true;
+        sessionIdRef.current = sessionIdToEnd;
+        setIsTracking(true);
+        
         try {
           await startNativeForegroundService();
         } catch {
@@ -705,18 +710,37 @@ const LocationTrackingScreen = () => {
     }
 
     await setTrackingPipEnabled(false);
-    stopForegroundTimers();
-    if (durationTimerRef.current) {
-      clearInterval(durationTimerRef.current);
-      durationTimerRef.current = null;
+
+    // NOTE: Do NOT sync buffered native points when ending session
+    // These are old locations that would incorrectly add to the distance
+    // The background services are already stopped, so no new points are coming
+    // await syncNativeBufferedPointsForSession(sessionId);
+
+    // Get current location and build location data for end session
+    let endLocationData = null;
+    try {
+      const endLocation = await getCurrentLocation();
+      const geoResult = await geocodeLatLng(endLocation.latitude, endLocation.longitude);
+      const batteryLevel = await DeviceInfo.getBatteryLevel();
+      endLocationData = {
+        latitude: endLocation.latitude,
+        longitude: endLocation.longitude,
+        accuracy: endLocation.accuracy,
+        heading: endLocation.bearing,
+        speed: endLocation.speed,
+        address: geoResult?.address || null,
+        road: geoResult?.road || null,
+        area: geoResult?.area || null,
+        batteryPercentage: Math.round((batteryLevel || 0) * 100),
+        isOnline: true,
+        remark: 'Tracking ended',
+      };
+    } catch (locationError) {
+      console.warn('Failed to get location for end session:', locationError?.message);
     }
 
     try {
-      // IMPORTANT: Do NOT sync buffered native points when ending session
-      // These are old locations that would incorrectly add to the distance
-      await syncNativeBufferedPointsForSession(sessionId);
-
-      await TrackingService.endSessionOfflineFirst(sessionIdToEnd, endPhotoFile);
+      await TrackingService.endSessionOfflineFirst(sessionIdToEnd, endPhotoFile, endLocationData);
       await AsyncStorage.removeItem(LAST_SESSION_KEY);
 
       // Do NOT sync pending locations when ending - they would add more distance
@@ -755,6 +779,7 @@ const LocationTrackingScreen = () => {
     }
   }, [
     captureCameraPhoto,
+    getCurrentLocation,
     loadSessionLocations,
     navigation,
     showAlert,
@@ -824,8 +849,37 @@ const LocationTrackingScreen = () => {
         return;
       }
 
-      // STEP 5: Start the tracking session
-      const started = await TrackingService.startSessionOfflineFirst(startPhotoFile);
+      // STEP 5: Build location data for the session
+      let locationDataForSession = null;
+      try {
+        const geoResult = await geocodeLatLng(initialLocation.latitude, initialLocation.longitude);
+        const batteryLevel = await DeviceInfo.getBatteryLevel();
+        locationDataForSession = {
+          latitude: initialLocation.latitude,
+          longitude: initialLocation.longitude,
+          accuracy: initialLocation.accuracy,
+          heading: initialLocation.bearing,
+          speed: initialLocation.speed,
+          address: geoResult?.address || null,
+          road: geoResult?.road || null,
+          area: geoResult?.area || null,
+          batteryPercentage: Math.round((batteryLevel || 0) * 100),
+          isOnline: true,
+        };
+      } catch (geoError) {
+        console.warn('Failed to get geocode or battery for session start:', geoError?.message);
+        locationDataForSession = {
+          latitude: initialLocation.latitude,
+          longitude: initialLocation.longitude,
+          accuracy: initialLocation.accuracy,
+          heading: initialLocation.bearing,
+          speed: initialLocation.speed,
+          isOnline: true,
+        };
+      }
+
+      // STEP 6: Start the tracking session with location data
+      const started = await TrackingService.startSessionOfflineFirst(startPhotoFile, locationDataForSession);
       // console.log('Start tracking response:', started);
       const sessionId = started?.sessionId;
       // console.log("sessionId ----", sessionId);
@@ -854,10 +908,10 @@ const LocationTrackingScreen = () => {
         }),
       );
 
-      // STEP 6: Send the initial location point
+      // STEP 7: Send the initial location point
       await sendLocationPoint(initialLocation, 'start');
 
-      // STEP 7: Start foreground services and timers
+      // STEP 8: Start foreground services and timers
       await startNativeForegroundService();
       await setTrackingPipEnabled(isScreenFocused);
       await loadSessionLocations(sessionId, true);
@@ -1312,7 +1366,7 @@ const LocationTrackingScreen = () => {
           <Marker
             key={`${mapKeyPrefix}-end`}
             coordinate={endCoordinate}
-            pinColor="#FF8C00"
+            pinColor="red"
             title="End"
             zIndex={1001}
           />,
@@ -1340,7 +1394,7 @@ const LocationTrackingScreen = () => {
             <Marker
               key={`${mapKeyPrefix}-photo-${item.id}`}
               coordinate={{ latitude: Number(item.latitude), longitude: Number(item.longitude) }}
-              pinColor="#DC2626"
+              pinColor="#FF8C00"
               title="Photo"
               description={item.remark || 'Photo point'}
             />,
@@ -1402,7 +1456,7 @@ const LocationTrackingScreen = () => {
                 style={styles.btnIcon}
               />
               <Text style={styles.mainBtnText}>
-                {isTracking ? 'Punch Out' : 'Punch In'}
+                {isTracking ? 'Check Out' : 'Check In'}
               </Text>
             </>
           )}

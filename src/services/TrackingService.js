@@ -396,7 +396,7 @@ const TRACKING_BASE = 'api/Tracking';
 
 const isLocalSessionId = (id) => id && String(id).startsWith('local_');
 
-const buildPhotoFormData = (photoFile) => {
+const buildPhotoFormData = (photoFile, locationData = null) => {
   const fd = new FormData();
   if (!photoFile?.uri) return fd;
   fd.append('photo', {
@@ -404,22 +404,63 @@ const buildPhotoFormData = (photoFile) => {
     name: photoFile.fileName || photoFile.name || `photo_${Date.now()}.jpg`,
     type: photoFile.type || 'image/jpeg',
   });
+
+  // Add optional body parameters
+  if (locationData) {
+    if (locationData.latitude != null) {
+      fd.append('latitude', String(locationData.latitude));
+    }
+    if (locationData.longitude != null) {
+      fd.append('longitude', String(locationData.longitude));
+    }
+    if (locationData.accuracy != null) {
+      fd.append('accuracy', String(locationData.accuracy));
+    }
+    if (locationData.heading != null) {
+      fd.append('heading', String(locationData.heading));
+    }
+    if (locationData.speed != null) {
+      fd.append('speed', String(locationData.speed));
+    }
+    if (locationData.address) {
+      fd.append('address', locationData.address);
+    }
+    if (locationData.road) {
+      fd.append('road', locationData.road);
+    }
+    if (locationData.area) {
+      fd.append('area', locationData.area);
+    }
+    if (locationData.amount != null) {
+      fd.append('amount', String(locationData.amount));
+    }
+    if (locationData.remark) {
+      fd.append('remark', locationData.remark);
+    }
+    if (locationData.batteryPercentage != null) {
+      fd.append('batteryPercentage', String(locationData.batteryPercentage));
+    }
+    if (locationData.isOnline != null) {
+      fd.append('isOnline', locationData.isOnline ? 'true' : 'false');
+    }
+  }
+
   return fd;
 };
 
-export const startSession = async (photoFile) => {
+export const startSession = async (photoFile, locationData = null) => {
   try {
     if (!photoFile?.uri) {
       throw new Error('Photo is required to start tracking');
     }
-    const formData = buildPhotoFormData(photoFile);
+    const formData = buildPhotoFormData(photoFile, locationData);
     const response = await Api.post(`${TRACKING_BASE}/AddTrackingSession`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000,
       validateStatus: (status) => status >= 200 && status < 300,
     });
     const data = response?.data;
-    // console.log("startSession ---------->", data);
+    // console.log("startSession --------->", data);
     return data;
   } catch (error) {
     console.error('Failed to start session:', error);
@@ -445,12 +486,12 @@ export const createSessionDirectly = async () => {
   }
 };
 
-export const startSessionOfflineFirst = async (photoFile) => {
+export const startSessionOfflineFirst = async (photoFile, locationData = null) => {
   try {
     if (!photoFile?.uri) {
       throw new Error('Photo is required to start tracking');
     }
-    const formData = buildPhotoFormData(photoFile);
+    const formData = buildPhotoFormData(photoFile, locationData);
     const response = await Api.post(`${TRACKING_BASE}/AddTrackingSession`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000,
@@ -706,7 +747,7 @@ export const endSessionOfflineFirst = async (sessionId, photoFile, locationData 
     return { success: true, storedOffline: true };
   }
   try {
-    const data = await endSession(sessionId, photoFile);
+    const data = await endSession(sessionId, photoFile, locationData);
     return data;
   } catch (error) {
     console.warn('End session API failed (offline?), session saved locally:', error?.message);
@@ -714,11 +755,11 @@ export const endSessionOfflineFirst = async (sessionId, photoFile, locationData 
   }
 };
 
-export const endSession = async (sessionId, photoFile) => {
+export const endSession = async (sessionId, photoFile, locationData = null) => {
   try {
     // Allow ending session without photo for offline sync scenarios
     // The server may accept this or reject - we'll handle the error
-    const formData = buildPhotoFormData(photoFile);
+    const formData = buildPhotoFormData(photoFile, locationData);
     const response = await Api.put(`${TRACKING_BASE}/${sessionId}/end`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 30000,
