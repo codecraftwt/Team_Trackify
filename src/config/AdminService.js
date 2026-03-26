@@ -1204,3 +1204,100 @@ export const getActiveUsersCurrentLocations = async adminId => {
     };
   }
 };
+
+// ======================================================================
+// verify otp apis
+/**
+ * Verify email OTP
+ * @param {string} email - User's email address
+ * @param {string} otp - OTP to verify
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+export const verifyEmailOtp = async (email, otp) => {
+  try {
+    const response = await fetch(`${BASE_URL}/api/users/verify-email-otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, otp }),
+    });
+
+    const text = await response.text();
+
+    if (!text) {
+      return {
+        success: false,
+        message: 'Empty response from server'
+      };
+    }
+
+    const result = JSON.parse(text);
+
+    if (response.ok && result.status === 1) {
+      return {
+        success: true,
+        message: result.message || 'Email verified successfully'
+      };
+    } else {
+      return {
+        success: false,
+        message: result.message || 'Failed to verify OTP'
+      };
+    }
+
+  } catch (error) {
+    console.error('Error verifying email OTP =====>', error);
+    return {
+      success: false,
+      message: error.message || 'Something went wrong'
+    };
+  }
+};
+
+/**
+ * Resend email verification OTP
+ * @param {string} email - User's email address
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+export const resendEmailOtp = async (email) => {
+  try {
+    const response = await fetch(`${BASE_URL}/api/users/resend-email-otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const text = await response.text();
+
+    if (!text) {
+      return {
+        success: false,
+        message: 'Empty response from server'
+      };
+    }
+
+    const result = JSON.parse(text);
+
+    if (response.ok && result.status === 1) {
+      return {
+        success: true,
+        message: result.message || 'OTP resent successfully'
+      };
+    } else {
+      return {
+        success: false,
+        message: result.message || 'Failed to resend OTP'
+      };
+    }
+
+  } catch (error) {
+    console.error('Error resending email OTP =====>', error);
+    return {
+      success: false,
+      message: error.message || 'Something went wrong'
+    };
+  }
+};

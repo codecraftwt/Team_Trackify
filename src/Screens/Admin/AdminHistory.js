@@ -60,8 +60,8 @@ const AdminHistory = ({ navigation, route }) => {
     avatarUri: null, // For preview
   });
 
-  // Check if subscription is expired
-  const checkSubscription = async () => {
+  // Helper function to check if user has never purchased a plan
+  const hasNeverPurchasedPlan = useCallback(async () => {
     // Try to get subscription status from multiple sources
     let currentSubscriptionStatus = subscriptionStatus;
 
@@ -76,10 +76,101 @@ const AdminHistory = ({ navigation, route }) => {
       }
     }
 
+    // If subscription is expired AND there's no currentPaymentId (or it's null)
+    if (currentSubscriptionStatus?.isExpired === true && !currentSubscriptionStatus?.currentPaymentId) {
+      return true;
+    }
+
+    return false;
+  }, [subscriptionStatus]);
+
+  // Get appropriate message based on subscription status
+  const getAppropriateSubscriptionMessage = useCallback(async () => {
+    let currentSubscriptionStatus = subscriptionStatus;
+
+    if (!currentSubscriptionStatus) {
+      try {
+        const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+        if (storedStatus) {
+          currentSubscriptionStatus = JSON.parse(storedStatus);
+        }
+      } catch (error) {
+        console.error('Error loading subscription status:', error);
+      }
+    }
+
+    const neverHadPlan = await hasNeverPurchasedPlan();
+
+    if (currentSubscriptionStatus?.isExpired === true) {
+      if (neverHadPlan) {
+        return 'Please buy a plan to add or manage users';
+      }
+      return 'Your plan has expired. Please renew to continue managing users.';
+    }
+
+    return null;
+  }, [subscriptionStatus, hasNeverPurchasedPlan]);
+
+  // Check if subscription is expired
+  // const checkSubscription = async () => {
+  //   // Try to get subscription status from multiple sources
+  //   let currentSubscriptionStatus = subscriptionStatus;
+
+  //   if (!currentSubscriptionStatus) {
+  //     try {
+  //       const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+  //       if (storedStatus) {
+  //         currentSubscriptionStatus = JSON.parse(storedStatus);
+  //       }
+  //     } catch (error) {
+  //       console.error('Error loading subscription status:', error);
+  //     }
+  //   }
+
+  //   if (userRole === 'Admin' && isSubscriptionExpired(currentSubscriptionStatus)) {
+  //     Alert.alert(
+  //       'Subscription Expired',
+  //       getSubscriptionMessage(currentSubscriptionStatus) || 'Your plan has expired. Please renew to continue.',
+  //       [
+  //         {
+  //           text: 'Go to Plans',
+  //           onPress: () => navigation.navigate('ManagePlans'),
+  //         },
+  //         {
+  //           text: 'Go to Dashboard',
+  //           onPress: () => navigation.navigate('AdminDashboard'),
+  //         },
+  //       ],
+  //       { cancelable: false }
+  //     );
+  //     return false;
+  //   }
+  //   return true;
+  // };
+  // Check subscription with appropriate message
+  const checkSubscription = useCallback(async () => {
+    let currentSubscriptionStatus = subscriptionStatus;
+
+    if (!currentSubscriptionStatus) {
+      try {
+        const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+        if (storedStatus) {
+          currentSubscriptionStatus = JSON.parse(storedStatus);
+        }
+      } catch (error) {
+        console.error('Error loading subscription status:', error);
+      }
+    }
+
     if (userRole === 'Admin' && isSubscriptionExpired(currentSubscriptionStatus)) {
+      const neverHadPlan = !currentSubscriptionStatus?.currentPaymentId;
+      const message = neverHadPlan
+        ? 'Please buy a plan to add or manage users'
+        : 'Your plan has expired. Please renew to continue managing users.';
+
       Alert.alert(
-        'Subscription Expired',
-        getSubscriptionMessage(currentSubscriptionStatus) || 'Your plan has expired. Please renew to continue.',
+        'Subscription Required',
+        message,
         [
           {
             text: 'Go to Plans',
@@ -95,7 +186,7 @@ const AdminHistory = ({ navigation, route }) => {
       return false;
     }
     return true;
-  };
+  }, [userRole, navigation, subscriptionStatus]);
 
   // Check subscription on mount
   useEffect(() => {
@@ -199,22 +290,73 @@ const AdminHistory = ({ navigation, route }) => {
   };
 
   // Handle add user - Open modal
-  const handleAddUser = () => {
+  // const handleAddUser = () => {
+  //   // Check subscription before allowing add user
+  //   if (userRole === 'Admin' && isSubscriptionExpired(subscriptionStatus)) {
+  //     Alert.alert(
+  //       'Subscription Expired',
+  //       getSubscriptionMessage(subscriptionStatus) || 'Your plan has expired. Please renew to add new users.',
+  //       [
+  //         {
+  //           text: 'Go to Plans',
+  //           onPress: () => navigation.navigate('ManagePlans'),
+  //         },
+  //         { text: 'Cancel', style: 'cancel' },
+  //       ]
+  //     );
+  //     return;
+  //   }
+  //   setNewUserData({
+  //     name: '',
+  //     email: '',
+  //     password: '',
+  //     mobile_no: '',
+  //     address: '',
+  //     role_id: 0,
+  //     avatar: null,
+  //     avatarUri: null,
+  //   });
+  //   setAddUserModalVisible(true);
+  // };
+  // Handle add user - Open modal with subscription check
+  const handleAddUser = async () => {
     // Check subscription before allowing add user
-    if (userRole === 'Admin' && isSubscriptionExpired(subscriptionStatus)) {
-      Alert.alert(
-        'Subscription Expired',
-        getSubscriptionMessage(subscriptionStatus) || 'Your plan has expired. Please renew to add new users.',
-        [
-          {
-            text: 'Go to Plans',
-            onPress: () => navigation.navigate('ManagePlans'),
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
-      return;
+    if (userRole === 'Admin') {
+      let currentSubscriptionStatus = subscriptionStatus;
+
+      if (!currentSubscriptionStatus) {
+        try {
+          const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+          if (storedStatus) {
+            currentSubscriptionStatus = JSON.parse(storedStatus);
+          }
+        } catch (error) {
+          console.error('Error loading subscription status:', error);
+        }
+      }
+
+      const neverHadPlan = !currentSubscriptionStatus?.currentPaymentId;
+
+      if (isSubscriptionExpired(currentSubscriptionStatus)) {
+        const message = neverHadPlan
+          ? 'Please buy a plan to add new users.'
+          : 'Your plan has expired. Please renew to add new users.';
+
+        Alert.alert(
+          'Subscription Required',
+          message,
+          [
+            {
+              text: 'Go to Plans',
+              onPress: () => navigation.navigate('ManagePlans'),
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
     }
+
     setNewUserData({
       name: '',
       email: '',
@@ -459,27 +601,79 @@ const AdminHistory = ({ navigation, route }) => {
   }, [searchQuery, activeTab, users]);
 
   // Handle edit user - Open edit modal with user data
-  const handleEditUser = (user) => {
+  // const handleEditUser = (user) => {
+  //   // Check subscription before allowing edit user
+  //   if (userRole === 'Admin' && isSubscriptionExpired(subscriptionStatus)) {
+  //     Alert.alert(
+  //       'Subscription Expired',
+  //       getSubscriptionMessage(subscriptionStatus) || 'Your plan has expired. Please renew to edit users.',
+  //       [
+  //         {
+  //           text: 'Go to Plans',
+  //           onPress: () => navigation.navigate('ManagePlans'),
+  //         },
+  //         { text: 'Cancel', style: 'cancel' },
+  //       ]
+  //     );
+  //     return;
+  //   }
+  //   setSelectedUser(user);
+  //   setEditUserData({
+  //     name: user.name || '',
+  //     email: user.email || '',
+  //     password: '', // Don't pre-fill password
+  //     mobile_no: user.mobile_no || '',
+  //     address: user.address || '',
+  //     role_id: user.role_id || 0,
+  //     isActive: user.isActive !== false,
+  //     status: user.status || 1,
+  //   });
+  //   setEditUserModalVisible(true);
+  // };
+  // Handle edit user - Open edit modal with user data
+  const handleEditUser = async (user) => {
     // Check subscription before allowing edit user
-    if (userRole === 'Admin' && isSubscriptionExpired(subscriptionStatus)) {
-      Alert.alert(
-        'Subscription Expired',
-        getSubscriptionMessage(subscriptionStatus) || 'Your plan has expired. Please renew to edit users.',
-        [
-          {
-            text: 'Go to Plans',
-            onPress: () => navigation.navigate('ManagePlans'),
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
-      return;
+    if (userRole === 'Admin') {
+      let currentSubscriptionStatus = subscriptionStatus;
+
+      if (!currentSubscriptionStatus) {
+        try {
+          const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+          if (storedStatus) {
+            currentSubscriptionStatus = JSON.parse(storedStatus);
+          }
+        } catch (error) {
+          console.error('Error loading subscription status:', error);
+        }
+      }
+
+      const neverHadPlan = !currentSubscriptionStatus?.currentPaymentId;
+
+      if (isSubscriptionExpired(currentSubscriptionStatus)) {
+        const message = neverHadPlan
+          ? 'Please buy a plan to edit users.'
+          : 'Your plan has expired. Please renew to edit users.';
+
+        Alert.alert(
+          'Subscription required',
+          message,
+          [
+            {
+              text: 'Go to Plans',
+              onPress: () => navigation.navigate('ManagePlans'),
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
     }
+
     setSelectedUser(user);
     setEditUserData({
       name: user.name || '',
       email: user.email || '',
-      password: '', // Don't pre-fill password
+      password: '',
       mobile_no: user.mobile_no || '',
       address: user.address || '',
       role_id: user.role_id || 0,
@@ -536,22 +730,88 @@ const AdminHistory = ({ navigation, route }) => {
   };
 
   // Handle delete user
-  const handleDeleteUser = (user) => {
+  // const handleDeleteUser = (user) => {
+  //   // Check subscription before allowing delete user
+  //   if (userRole === 'Admin' && isSubscriptionExpired(subscriptionStatus)) {
+  //     Alert.alert(
+  //       'Subscription Expired',
+  //       getSubscriptionMessage(subscriptionStatus) || 'Your plan has expired. Please renew to delete users.',
+  //       [
+  //         {
+  //           text: 'Go to Plans',
+  //           onPress: () => navigation.navigate('ManagePlans'),
+  //         },
+  //         { text: 'Cancel', style: 'cancel' },
+  //       ]
+  //     );
+  //     return;
+  //   }
+  //   Alert.alert(
+  //     'Delete User',
+  //     `Are you sure you want to delete ${user.name}?`,
+  //     [
+  //       { text: 'Cancel', style: 'cancel' },
+  //       {
+  //         text: 'Delete',
+  //         style: 'destructive',
+  //         onPress: async () => {
+  //           try {
+  //             const response = await deleteUser(user.id);
+
+  //             if (response.success) {
+  //               Alert.alert('Success', 'User deleted successfully');
+  //               fetchUsers(true); // Refresh the list
+  //             } else {
+  //               Alert.alert('Error', response.message || 'Failed to delete user');
+  //             }
+  //           } catch (err) {
+  //             Alert.alert('Error', 'Something went wrong while deleting user');
+  //             console.error('Error deleting user:', err);
+  //           }
+  //         }
+  //       }
+  //     ]
+  //   );
+  // };
+  // Handle delete user with subscription check
+  const handleDeleteUser = async (user) => {
     // Check subscription before allowing delete user
-    if (userRole === 'Admin' && isSubscriptionExpired(subscriptionStatus)) {
-      Alert.alert(
-        'Subscription Expired',
-        getSubscriptionMessage(subscriptionStatus) || 'Your plan has expired. Please renew to delete users.',
-        [
-          {
-            text: 'Go to Plans',
-            onPress: () => navigation.navigate('ManagePlans'),
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
-      return;
+    if (userRole === 'Admin') {
+      let currentSubscriptionStatus = subscriptionStatus;
+
+      if (!currentSubscriptionStatus) {
+        try {
+          const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+          if (storedStatus) {
+            currentSubscriptionStatus = JSON.parse(storedStatus);
+          }
+        } catch (error) {
+          console.error('Error loading subscription status:', error);
+        }
+      }
+
+      const neverHadPlan = !currentSubscriptionStatus?.currentPaymentId;
+
+      if (isSubscriptionExpired(currentSubscriptionStatus)) {
+        const message = neverHadPlan
+          ? 'Please buy a plan to delete users.'
+          : 'Your plan has expired. Please renew to delete users.';
+
+        Alert.alert(
+          'Subscription Required',
+          message,
+          [
+            {
+              text: 'Go to Plans',
+              onPress: () => navigation.navigate('ManagePlans'),
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        );
+        return;
+      }
     }
+
     Alert.alert(
       'Delete User',
       `Are you sure you want to delete ${user.name}?`,
@@ -566,7 +826,7 @@ const AdminHistory = ({ navigation, route }) => {
 
               if (response.success) {
                 Alert.alert('Success', 'User deleted successfully');
-                fetchUsers(true); // Refresh the list
+                fetchUsers(true);
               } else {
                 Alert.alert('Error', response.message || 'Failed to delete user');
               }

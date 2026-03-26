@@ -52,6 +52,21 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
   const scrollViewRef = useRef(null);
   const isScreenFocused = useIsFocused();
 
+  // Add this function to determine if user never had a plan
+  const hasNeverPurchasedPlan = () => {
+    // Check from subscriptionStatus
+    if (isSubscriptionExpiredFlag && !subscriptionStatus?.currentPaymentId) {
+      return true;
+    }
+
+    // Also check from currentUser data as fallback
+    if (planExpired && !currentUser?.currentPaymentId) {
+      return true;
+    }
+
+    return false;
+  };
+
   // Check if subscription is expired
   const isSubscriptionExpiredFlag = subscriptionStatus?.isExpired === true;
 
@@ -64,11 +79,33 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
   }, []);
 
   // Load subscription status from AsyncStorage
+  // const loadSubscriptionStatus = async () => {
+  //   try {
+  //     // First check if we have it from route params or auth context
+  //     if (subscriptionStatus) {
+  //       setPlanExpired(subscriptionStatus.isExpired === true);
+  //       return;
+  //     }
+
+  //     // If not, try to load from AsyncStorage
+  //     const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+  //     if (storedStatus) {
+  //       const parsedStatus = JSON.parse(storedStatus);
+  //       // console.log('Loaded subscription status from storage:', parsedStatus);
+  //       // Update planExpired state based on stored subscription status
+  //       setPlanExpired(parsedStatus.isExpired === true);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error loading subscription status:', error);
+  //   }
+  // };
+  // Update loadSubscriptionStatus function (lines 84-97)
   const loadSubscriptionStatus = async () => {
     try {
       // First check if we have it from route params or auth context
       if (subscriptionStatus) {
         setPlanExpired(subscriptionStatus.isExpired === true);
+        // You might also want to store currentPaymentId if needed
         return;
       }
 
@@ -76,9 +113,12 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
       const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
       if (storedStatus) {
         const parsedStatus = JSON.parse(storedStatus);
-        // console.log('Loaded subscription status from storage:', parsedStatus);
-        // Update planExpired state based on stored subscription status
         setPlanExpired(parsedStatus.isExpired === true);
+        // Store currentPaymentId if available
+        if (parsedStatus.currentPaymentId) {
+          // Optionally store for later use
+          await AsyncStorage.setItem('currentPaymentId', parsedStatus.currentPaymentId);
+        }
       }
     } catch (error) {
       console.error('Error loading subscription status:', error);
@@ -170,6 +210,17 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
         // console.log('Plan Expired:', userResult.planExpired);
         setCurrentUser(userResult.data);
         setPlanExpired(userResult.planExpired);
+        if (userResult.planExpired && !userResult.data?.currentPaymentId) {
+          // User never had a plan but is marked as expired
+          // You might want to update the subscriptionStatus in context
+          const updatedStatus = {
+            ...subscriptionStatus,
+            isExpired: true,
+            currentPaymentId: null
+          };
+          // Optionally update AsyncStorage or context
+          await AsyncStorage.setItem('subscriptionStatus', JSON.stringify(updatedStatus));
+        }
       } else {
         // console.log('Error fetching user details:', userResult.message);
       }
@@ -226,9 +277,9 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
     navigation.navigate('OngoingUsers');
   };
 
-  const handleUserPress = (userId, userName) => {
-    navigation.navigate('UserTrackingSummary', { userId, userName });
-  };
+  // const handleUserPress = (userId, userName) => {
+  //   navigation.navigate('UserTrackingSummary', { userId, userName });
+  // };
 
   const handlePlanToggle = () => {
     setShowPlanDetails(!showPlanDetails);
@@ -266,22 +317,6 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
     return 'Just now';
   };
 
-  // Calculate total add-on amount
-  // const calculateTotalAddOnAmount = () => {
-  //   if (!currentUser?.currentPaymentId?.addOns) return 0;
-  //   return currentUser.currentPaymentId.addOns.reduce((total, addon) => {
-  //     return total + (addon.addOnAmount || 0);
-  //   }, 0);
-  // };
-
-  // Calculate total users from add-ons
-  // const calculateTotalUsers = () => {
-  //   if (!currentUser?.currentPaymentId?.addOns) return 0;
-  //   return currentUser.currentPaymentId.addOns.reduce((total, addon) => {
-  //     return total + (addon.addOnMaxUser || 0);
-  //   }, 0);
-  // };
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -305,21 +340,26 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
         titleStyle={{ fontSize: 24 }}
       />
 
-      {/* Subscription Expired Warning Banner */}
       {isSubscriptionExpiredFlag && (
         <View style={styles.expiredBanner}>
           <Icon name="warning" size={24} color="#FFFFFF" />
           <View style={styles.expiredBannerTextContainer}>
-            <Text style={styles.expiredBannerTitle}>Subscription Expired</Text>
+            <Text style={styles.expiredBannerTitle}>
+              {hasNeverPurchasedPlan() ? 'No Active Plan' : 'Subscription Expired'}
+            </Text>
             <Text style={styles.expiredBannerText}>
-              {subscriptionMessage || 'Your plan has expired. Please renew to continue.'}
+              {subscriptionMessage || (hasNeverPurchasedPlan()
+                ? 'Get started by selecting a plan to explore our services'
+                : 'Your plan has expired. Please renew to continue.')}
             </Text>
           </View>
           <TouchableOpacity
             style={styles.renewButton}
             onPress={() => navigation.navigate('ManagePlans')}
           >
-            <Text style={styles.renewButtonText}>Renew Plan</Text>
+            <Text style={styles.renewButtonText}>
+              {hasNeverPurchasedPlan() ? 'Buy Plan' : 'Renew Plan'}
+            </Text>
             <Icon name="arrow-forward" size={18} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
@@ -334,8 +374,7 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
         }
         contentContainerStyle={styles.scrollViewContent}
       >
-        {/* Plan Details Section */}
-        {currentUser && (
+        {/* {currentUser && (
           <View style={styles.planContainer}>
             <TouchableOpacity
               style={styles.planHeader}
@@ -353,7 +392,6 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
               />
             </TouchableOpacity>
 
-            {/* Always visible - Basic Plan Info */}
             <View style={styles.basicPlanInfo}>
               <View style={styles.planRow}>
                 <Text style={styles.planLabel}>Plan:</Text>
@@ -381,7 +419,6 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
               </View>
             </View>
 
-            {/* Hidden details - shown only when toggled */}
             {showPlanDetails && (
               <View style={styles.hiddenDetails}>
                 <View style={styles.divider} />
@@ -435,7 +472,6 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                   )}
                 </View>
 
-                {/* Add-ons Toggle Section */}
                 {currentUser.currentPaymentId?.addOns && currentUser.currentPaymentId.addOns.length > 0 && (
                   <View style={styles.addOnsSection}>
                     <TouchableOpacity
@@ -550,7 +586,224 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
               </View>
             )}
           </View>
+        )} */}
+        {/* Plan Details Section - Only show if user has a payment ID OR if not expired */}
+{currentUser && (currentUser.currentPaymentId || !planExpired) && (
+  <View style={styles.planContainer}>
+    <TouchableOpacity
+      style={styles.planHeader}
+      onPress={handlePlanToggle}
+      activeOpacity={0.7}
+    >
+      <View style={styles.planTitleContainer}>
+        <Icon name="card-membership" size={20} color="#3088C7" />
+        <Text style={styles.planTitle}>Current Plan Details</Text>
+      </View>
+      <Icon
+        name={showPlanDetails ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+        size={24}
+        color="#666"
+      />
+    </TouchableOpacity>
+
+    {/* Always visible - Basic Plan Info */}
+    <View style={styles.basicPlanInfo}>
+      <View style={styles.planRow}>
+        <Text style={styles.planLabel}>Plan:</Text>
+        <Text style={styles.planValue} numberOfLines={1}>
+          {currentUser.currentPaymentId?.description || 'Basic Plan'}
+        </Text>
+      </View>
+
+      <View style={styles.planRow}>
+        <Text style={styles.planLabel}>Amount:</Text>
+        <Text style={styles.planValue}>
+          ₹{currentUser.currentPaymentId?.amount || 0}
+        </Text>
+      </View>
+
+      <View style={styles.planRow}>
+        <Text style={styles.planLabel}>Expiry Date:</Text>
+        <Text style={[
+          styles.planValue,
+          planExpired ? styles.expiredText : styles.activeText
+        ]}>
+          {formatDate(currentUser.currentPaymentId?.expiresAt) || 'N/A'}
+          {planExpired && ' (Expired)'}
+        </Text>
+      </View>
+    </View>
+
+    {/* Hidden details - shown only when toggled */}
+    {showPlanDetails && (
+      <View style={styles.hiddenDetails}>
+        <View style={styles.divider} />
+
+        <View style={styles.planDetails}>
+          <View style={styles.planRow}>
+            <Text style={styles.planLabel}>Status:</Text>
+            <View style={styles.statusBadge}>
+              <Text style={[
+                styles.statusText,
+                { color: planExpired ? '#D32F2F' : '#388E3C' }
+              ]}>
+                {planExpired ? 'Expired' : 'Active'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.planRow}>
+            <Text style={styles.planLabel}>Start Date:</Text>
+            <Text style={styles.planValue}>
+              {formatDate(currentUser.currentPaymentId?.createdAt) || 'N/A'}
+            </Text>
+          </View>
+
+          <View style={styles.planRow}>
+            <Text style={styles.planLabel}>Base Users:</Text>
+            <Text style={styles.planValue}>
+              {currentUser.currentPaymentId?.maxUser || 0}
+            </Text>
+          </View>
+
+          {currentUser.currentPaymentId?.paymentMethod && (
+            <View style={styles.planRow}>
+              <Text style={styles.planLabel}>Payment Method:</Text>
+              <Text style={styles.planValue}>
+                {currentUser.currentPaymentId.paymentMethod}
+              </Text>
+            </View>
+          )}
+
+          {currentUser.currentPaymentId?.paymentStatus && (
+            <View style={styles.planRow}>
+              <Text style={styles.planLabel}>Payment Status:</Text>
+              <Text style={[
+                styles.planValue,
+                { color: getStatusColor(currentUser.currentPaymentId.paymentStatus) }
+              ]}>
+                {getStatusText(currentUser.currentPaymentId.paymentStatus)}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Add-ons Toggle Section */}
+        {currentUser.currentPaymentId?.addOns && currentUser.currentPaymentId.addOns.length > 0 && (
+          <View style={styles.addOnsSection}>
+            <TouchableOpacity
+              style={styles.addOnsHeader}
+              onPress={() => setShowAddOns(!showAddOns)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.addOnsTitleContainer}>
+                <Icon name="add-shopping-cart" size={18} color="#3088C7" />
+                <Text style={styles.addOnsTitle}>
+                  Add-on Plans ({currentUser.currentPaymentId.addOns.length})
+                </Text>
+              </View>
+              <Icon
+                name={showAddOns ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={20}
+                color="#666"
+              />
+            </TouchableOpacity>
+
+            {showAddOns && (
+              <View style={styles.addOnsList}>
+                {currentUser.currentPaymentId.addOns.map((addon, index) => (
+                  <View key={addon._id || index} style={styles.addOnItem}>
+                    <View style={styles.addOnHeader}>
+                      <Text style={styles.addOnNumber}>Add-on #{index + 1}</Text>
+                      <View style={[
+                        styles.addOnStatusBadge,
+                        { backgroundColor: addon.status === 'completed' ? '#E8F5E9' : '#FFF3E0' }
+                      ]}>
+                        <Text style={[
+                          styles.addOnStatusText,
+                          { color: addon.status === 'completed' ? '#388E3C' : '#F57C00' }
+                        ]}>
+                          {getStatusText(addon.status)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.addOnDetails}>
+                      <View style={styles.addOnRow}>
+                        <Text style={styles.addOnLabel}>Description:</Text>
+                        <Text style={styles.addOnValue} numberOfLines={2}>
+                          {addon.addOnDescription || 'Add-on Plan'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.addOnRow}>
+                        <Text style={styles.addOnLabel}>Amount:</Text>
+                        <Text style={styles.addOnValue}>₹{addon.addOnAmount || 0}</Text>
+                      </View>
+
+                      {addon.addOnOriginalAmount > addon.addOnAmount && (
+                        <View style={styles.addOnRow}>
+                          <Text style={styles.addOnLabel}>Original Amount:</Text>
+                          <Text style={[styles.addOnValue, styles.originalAmount]}>
+                            ₹{addon.addOnOriginalAmount}
+                          </Text>
+                        </View>
+                      )}
+
+                      {addon.addOnDiscountAmount > 0 && (
+                        <View style={styles.addOnRow}>
+                          <Text style={styles.addOnLabel}>Discount:</Text>
+                          <Text style={[styles.addOnValue, styles.discountAmount]}>
+                            -₹{addon.addOnDiscountAmount}
+                          </Text>
+                        </View>
+                      )}
+
+                      {addon.addOnCouponCode && (
+                        <View style={styles.addOnRow}>
+                          <Text style={styles.addOnLabel}>Coupon:</Text>
+                          <View style={styles.couponBadge}>
+                            <Text style={styles.couponText}>{addon.addOnCouponCode}</Text>
+                          </View>
+                        </View>
+                      )}
+
+                      <View style={styles.addOnRow}>
+                        <Text style={styles.addOnLabel}>Additional Users:</Text>
+                        <Text style={styles.addOnValue}>+{addon.addOnMaxUser || 0} users</Text>
+                      </View>
+
+                      <View style={styles.addOnRow}>
+                        <Text style={styles.addOnLabel}>Expiry Date:</Text>
+                        <Text style={[
+                          styles.addOnValue,
+                          new Date(addon.addOnExpiry) < new Date() ? styles.expiredText : styles.activeText
+                        ]}>
+                          {formatDate(addon.addOnExpiry)}
+                          {new Date(addon.addOnExpiry) < new Date() && ' (Expired)'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         )}
+
+        {planExpired && currentUser.currentPaymentId && (
+          <TouchableOpacity
+            style={styles.renewButton}
+            onPress={() => navigation.navigate('RenewPlan')}
+          >
+            <Text style={styles.renewButtonText}>Renew Plan</Text>
+            <Icon name="refresh" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
+      </View>
+    )}
+  </View>
+)}
 
         <View style={{ padding: 18 }}>
           <Text style={styles.welcomeText}>Tracking Overview :</Text>
@@ -566,7 +819,6 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
               <Text style={styles.statValue}>{userStats.activeUsers}</Text>
               <View style={styles.cardAction}>
                 <Text style={styles.actionText}>Total Active users</Text>
-                {/* <Icon name="arrow-forward" size={16} color="#1976D2" /> */}
               </View>
             </View>
 
@@ -580,7 +832,6 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
               <Text style={styles.statValue}>{userStats.inactiveUsers}</Text>
               <View style={styles.cardAction}>
                 <Text style={styles.actionText}>Total Inactive users</Text>
-                {/* <Icon name="arrow-forward" size={16} color="#D32F2F" /> */}
               </View>
             </View>
 
@@ -639,7 +890,6 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                   <Icon name="my-location" size={24} color="#689F38" />
                 </View>
                 <Text style={styles.cardTitle}>Live Tracking Users</Text>
-                {/* currentlyTracking */}
               </View>
               <Text style={styles.statValue}>{userStats.currentlyTracking}</Text>
               <View style={styles.cardAction}>
@@ -669,12 +919,6 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
             ) : recentActivities.length > 0 ? (
               <View style={styles.activitiesList}>
                 {recentActivities.map((activity, index) => (
-                  // <TouchableOpacity
-                  //   key={index}
-                  //   style={styles.activityItem}
-                  //   onPress={() => handleUserPress(activity.userId, activity.name)}
-                  //   activeOpacity={0.7}
-                  // >
                   <View style={styles.activityItem}>
                     <View style={styles.activityIconContainer}>
                       <View style={[styles.activityIcon, { backgroundColor: activity.status === 'active' ? '#E8F5E9' : '#FFF3E0' }]}>
@@ -714,11 +958,9 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                           <Icon name="access-time" size={14} color="#999" />
                           <Text style={styles.activityTimeText}>{formatTimeAgo()}</Text>
                         </View>
-                        {/* <Icon name="chevron-right" size={20} color="#999" /> */}
                       </View>
                     </View>
                   </View>
-                  // </TouchableOpacity>
                 ))}
               </View>
             ) : (

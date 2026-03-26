@@ -42,11 +42,45 @@ export const canAccessFeature = (subscriptionStatus, feature) => {
  * @param {Object} subscriptionStatus - Subscription status object from API
  * @returns {string} - Warning message
  */
+// export const getSubscriptionMessage = (subscriptionStatus) => {
+//   if (!subscriptionStatus) {
+//     return '';
+//   }
+//   return subscriptionStatus.message || 'Your plan has expired. Please renew to continue.';
+// };
+
+// utils/subscriptionUtils.js
+
 export const getSubscriptionMessage = (subscriptionStatus) => {
-  if (!subscriptionStatus) {
-    return '';
+  // Check if subscription is expired
+  if (!subscriptionStatus?.isExpired) {
+    return null;
   }
-  return subscriptionStatus.message || 'Your plan has expired. Please renew to continue.';
+
+  // Check if user never had a plan (no payment ID)
+  const hasNeverPurchasedPlan = !subscriptionStatus?.currentPaymentId;
+  
+  if (hasNeverPurchasedPlan) {
+    return 'Please buy a plan to check our services';
+  }
+
+  // User had a plan but it expired
+  return 'Your plan has expired. Please renew to continue.';
+};
+
+// Optional: Helper function to determine banner style or type
+export const getBannerType = (subscriptionStatus) => {
+  if (!subscriptionStatus?.isExpired) {
+    return null;
+  }
+
+  const hasNeverPurchasedPlan = !subscriptionStatus?.currentPaymentId;
+  
+  if (hasNeverPurchasedPlan) {
+    return 'no-plan'; // First time user
+  }
+  
+  return 'expired'; // Plan expired
 };
 
 /**

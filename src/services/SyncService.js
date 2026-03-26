@@ -17,6 +17,7 @@ let syncPromise = null; // Store the sync promise to prevent concurrent syncs
 let netInfoListener = null; // Store NetInfo listener to prevent duplicates
 let lastSyncTime = 0; // Track last sync time for debouncing
 const SYNC_DEBOUNCE_MS = 5000; // Minimum 5 seconds between sync triggers
+let syncLock = false; // Additional lock to prevent any concurrent syncs
 
 export const isOnline = async () => {
   const state = await NetInfo.fetch();
@@ -24,10 +25,13 @@ export const isOnline = async () => {
 };
 
 export const syncPendingLocations = async () => {
-  // If already syncing, return the existing promise to avoid duplicate syncs
-  if (isSyncing && syncPromise) {
-    console.log('[SyncService] Sync already in progress, waiting for it to complete...');
-    return syncPromise;
+  // If already syncing or sync lock is active, return the existing promise to avoid duplicate syncs
+  if ((isSyncing && syncPromise) || syncLock) {
+    console.log('[SyncService] Sync already in progress or locked, waiting for it to complete...');
+    if (syncPromise) {
+      return syncPromise;
+    }
+    return { success: false, synced: 0, reason: 'locked' };
   }
 
   // Debounce: prevent sync from being triggered too frequently
@@ -43,8 +47,9 @@ export const syncPendingLocations = async () => {
     return { success: false, synced: 0, reason: 'offline' };
   }
 
-  // Set isSyncing BEFORE anything else to prevent race conditions
+  // Set isSyncing AND syncLock BEFORE anything else to prevent race conditions
   isSyncing = true;
+  syncLock = true;
   lastSyncTime = now;
   let totalSynced = 0;
 
@@ -101,6 +106,9 @@ export const syncPendingLocations = async () => {
           await relocatePointsToSession(duplicate.localSessionId, main.localSessionId);
           console.log('[SyncService] Points relocated, will sync with main session');
         }
+        // Mark the duplicate session as synced so it won't be processed again
+        await updateSessionServerId(duplicate.localSessionId, 'DUPLICATE_MERGED');
+        console.log('[SyncService] Marked duplicate session as synced:', duplicate.localSessionId);
       }
 
       console.log('[SyncService] After deduplication:', deduplicatedSessions.length, 'sessions to process');
@@ -122,6 +130,16 @@ export const syncPendingLocations = async () => {
         let serverSessionId = currentSession?.serverSessionId;
         
         console.log('[SyncService] Current serverSessionId after re-fetch:', serverSessionId);
+
+        // Double-check if another concurrent process already created the session
+        // by querying again just before creating (with a small delay if needed)
+        if (!serverSessionId) {
+          // Add a small delay to allow any concurrent operations to complete
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const recheckSession = await getSessionByLocalId(session.localSessionId);
+          serverSessionId = recheckSession?.serverSessionId;
+          console.log('[SyncService] ServerSessionId after recheck:', serverSessionId);
+        }
 
         // If this session does not yet exist on the server (including
         // purely offline "local_*" sessions), create it now and link
@@ -329,6 +347,7 @@ export const syncPendingLocations = async () => {
       return { success: false, synced: totalSynced, error };
     } finally {
       isSyncing = false;
+      syncLock = false;
       syncPromise = null; // Clear the sync promise when done
     }
   })();

@@ -33,6 +33,8 @@ import ForgotPassword from '../Screens/ForgotPassword';
 import ManagePlans from '../Screens/Admin/ManagePlans';
 import PlanDetails from '../Screens/Admin/PlanDetails';
 import OngoingUsers from '../Screens/Admin/OngoingUsers';
+import RegisterScreen from '../Screens/RegisterScreen';
+import EmailVerificationScreen from '../Screens/EmailVerificationScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -189,6 +191,8 @@ const AuthStack = () => (
     <Stack.Screen name="LoginScreen" component={LoginScreen} />
     <Stack.Screen name="OTPScreen" component={OTPScreen} />
     <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
+    <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
+    <Stack.Screen name="EmailVerificationScreen" component={EmailVerificationScreen} />
   </Stack.Navigator>
 );
 

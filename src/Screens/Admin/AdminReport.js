@@ -57,7 +57,7 @@ const AdminReport = ({ navigation, route }) => {
       
       if (userRole === 'Admin' && isSubscriptionExpired(currentSubscriptionStatus)) {
         Alert.alert(
-          'Subscription Expired',
+          'Subscription Required',
           getSubscriptionMessage(currentSubscriptionStatus) || 'Your plan has expired. Please renew to continue.',
           [
             {

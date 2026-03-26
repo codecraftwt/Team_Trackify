@@ -111,7 +111,7 @@ const LoginScreen = ({ navigation }) => {
           password: password,
         }),
       });
-      
+
       const text = await response.text();
 
       if (!text) {
@@ -146,10 +146,10 @@ const LoginScreen = ({ navigation }) => {
         // Store user data in auth context
         // Check role_id from API response: 0 = user, 1 = admin
         const userRole = user.role_id === 1 ? 'Admin' : 'user';
-        
+
         // Get subscription status from API response
         const subscriptionStatusData = data.subscriptionStatus || null;
-        
+
         await setAuthData(
           token,
           user._id.toString(),
@@ -214,6 +214,11 @@ const LoginScreen = ({ navigation }) => {
   const handleForgotPassword = () => {
     // Navigate to forgot password screen
     navigation.navigate('ForgotPassword');
+  };
+
+  const handleRegister = () => {
+    // Navigate to register screen
+    navigation.navigate('RegisterScreen');
   };
 
   return (
@@ -314,6 +319,14 @@ const LoginScreen = ({ navigation }) => {
                   <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                 </TouchableOpacity>
 
+                {/* <TouchableOpacity
+                  onPress={handleRegister}
+                  style={{ flexDirection: 'row', marginTop: -10, justifyContent: 'center', marginBottom: 10 }}
+                >
+                  <Text style={{ marginRight: 5 }}>Don't have an account?</Text>
+                  <Text style={{ color: '#3088C7', fontWeight: 'bold' }}>Sign Up</Text>
+                </TouchableOpacity> */}
+
                 {/* Login Button */}
                 <TouchableOpacity
                   onPress={handleLogin}
@@ -360,7 +373,7 @@ const styles = {
     paddingVertical: 40,
   },
   scrollContainerKeyboardActive: {
-    justifyContent: 'flex-start', 
+    justifyContent: 'flex-start',
     paddingVertical: 20,
   },
   logoContainer: {

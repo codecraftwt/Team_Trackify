@@ -108,6 +108,11 @@ export const getAllSessionsWithUnsyncedLocations = async () => {
   
   const result = [];
   for (const session of sessions) {
+    // Skip sessions that have been marked as duplicates (DUPLICATE_MERGED)
+    if (session.serverSessionId === 'DUPLICATE_MERGED') {
+      continue;
+    }
+    
     const unsyncedCount = await locationsCollection()
       .query(Q.where('session_local_id', session.localSessionId), Q.where('synced', false))
       .fetchCount();

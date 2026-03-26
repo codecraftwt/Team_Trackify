@@ -346,7 +346,8 @@ const TrackingSessionDetailScreen = () => {
             latitude: Number(finalEndLocation.latitude),
             longitude: Number(finalEndLocation.longitude),
           }}
-          pinColor="#FF8C00"
+          // pinColor="#FF8C00"
+          pincolor="red"
           title="End"
           description={new Date(normalizeTimestamp(finalEndLocation.timestamp)).toLocaleString()}
           zIndex={1001}
@@ -360,7 +361,7 @@ const TrackingSessionDetailScreen = () => {
             latitude: Number(loc.latitude),
             longitude: Number(loc.longitude),
           }}
-          pinColor="#DC2626"
+          pinColor="#FF8C00"
           title="Photo Location"
           description={
             loc.remark != null ? String(loc.remark).trim() || undefined : undefined
