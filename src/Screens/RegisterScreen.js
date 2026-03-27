@@ -929,7 +929,7 @@ const RegisterScreen = ({ navigation, route }) => {
         <View style={styles.inputContainer}>
           <View style={styles.labelContainer}>
             <Icon name="location-outline" size={18} color={focusedField === 'address' ? '#007AFF' : '#666'} />
-            <Text style={[styles.label, focusedField === 'address' && styles.labelFocused]}>Address (Optional)</Text>
+            <Text style={[styles.label, focusedField === 'address' && styles.labelFocused]}>Address</Text>
           </View>
           <TextInput
             style={[styles.input, styles.textArea, errors.address && styles.inputError, focusedField === 'address' && styles.inputFocused]}

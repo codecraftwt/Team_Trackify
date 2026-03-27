@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Razorpay Key
 // export const RAZORPAY_KEY = 'rzp_test_SN1JoYwhNqRjPV';
-export const RAZORPAY_KEY = "rzp_live_0fMe7hBqXJktWH"
+export const RAZORPAY_KEY = "rzp_live_0fMe7hBqXJktWH";
 
 /**
  * Get admin ID from AsyncStorage
@@ -550,3 +550,39 @@ export const hasCustomPlan = async () => {
 };
 
 // ==================== END CUSTOM PLAN APIS ====================
+
+/**
+ * Check if user has already purchased a custom plan
+ * @returns {Promise<Object>} - Object with hasPurchased boolean
+ */
+export const checkCustomPlanPurchaseEligibility = async () => {
+  try {
+    // Get auth token
+    let token = await AsyncStorage.getItem('token');
+    if (!token) {
+      token = await AsyncStorage.getItem('authToken');
+    }
+
+    const response = await Api.get('/api/plans/custom/purchase-status', {
+      headers: token ? { 
+        Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` 
+      } : {}
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error checking custom plan purchase eligibility:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    // If 404 or error, assume not purchased
+    if (error.response?.status === 404) {
+      return { hasPurchased: false };
+    }
+    
+    // Return false on error to allow trying purchase
+    return { hasPurchased: false };
+  }
+};

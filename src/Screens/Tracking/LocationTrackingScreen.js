@@ -46,6 +46,7 @@ import {
   stopBackgroundLocationJob,
   isBackgroundJobRunning,
 } from '../../services/BackgroundLocationJob';
+import { useAuth } from '../../config/auth-context';
 
 const { width } = Dimensions.get('window');
 
@@ -174,6 +175,7 @@ const LocationTrackingScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const isScreenFocused = useIsFocused();
+  const { subscriptionStatus, userRole } = useAuth();
 
   const [isTracking, setIsTracking] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -207,6 +209,10 @@ const LocationTrackingScreen = () => {
 
   const autoStartTracking = route?.params?.autoStartTracking === true;
   const autoStopTracking = route?.params?.autoStopTracking === true;
+
+  // Check if subscription is expired for regular users
+  const isSubscriptionExpired = userRole !== 'Admin' && subscriptionStatus?.isExpired === true;
+  const subscriptionMessage = subscriptionStatus?.message || 'Your subscription has expired. Please contact admin.';
 
   // color scheme
   const colorScheme = useColorScheme();
@@ -787,6 +793,18 @@ const LocationTrackingScreen = () => {
     stopForegroundTimers,
   ]);
   const startTracking = useCallback(async () => {
+    // Check if subscription is expired for regular users before allowing tracking
+    if (isSubscriptionExpired) {
+      setLoading(false);
+      Alert.alert(
+        'Subscription Expired',
+        subscriptionMessage,
+        [{ text: 'OK' }],
+        { cancelable: false }
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       // STEP 1: Check if location services are enabled

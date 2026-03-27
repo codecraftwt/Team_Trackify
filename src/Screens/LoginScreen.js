@@ -318,8 +318,8 @@ const LoginScreen = ({ navigation }) => {
                 >
                   <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                 </TouchableOpacity>
-
-                {/* <TouchableOpacity
+{/* 
+                <TouchableOpacity
                   onPress={handleRegister}
                   style={{ flexDirection: 'row', marginTop: -10, justifyContent: 'center', marginBottom: 10 }}
                 >

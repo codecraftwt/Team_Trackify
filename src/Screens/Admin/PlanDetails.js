@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {
   getPlanById,
   createOrder,
   verifyPayment,
+  createAddonOrder,
+  verifyAddonPayment,
   RAZORPAY_KEY,
   getUserSubscriptionStatus,
   isAddOnPlan,
@@ -145,9 +147,22 @@ export default function PlanDetails({ route, navigation }) {
     try {
       setPurchasing(true);
 
-      // Create order - this should work for both regular and custom plans
-      // Make sure your createOrder function can handle custom plan IDs
-      const orderResponse = await createOrder(planId, isCustomPlan);
+      // Create order - use createOrder for base plans and custom plans
+      // Use createAddonOrder for add-on plans
+      let orderResponse;
+      let useAddonPayment = false;
+
+      if (isAddOn) {
+        // Add-on plan - use createAddonOrder
+        if (!subscriptionStatus.currentPaymentId) {
+          throw new Error('No active base plan found. Please purchase a base plan first.');
+        }
+        orderResponse = await createAddonOrder(planId, subscriptionStatus.currentPaymentId);
+        useAddonPayment = true;
+      } else {
+        // Base plan or custom plan - use createOrder
+        orderResponse = await createOrder(planId);
+      }
 
       if (!orderResponse.success) {
         throw new Error(orderResponse.message || 'Failed to create order');
@@ -176,13 +191,23 @@ export default function PlanDetails({ route, navigation }) {
 
       const razorpayResponse = await RazorpayCheckout.open(options);
 
-      // Verify payment
-      const verifyResponse = await verifyPayment(
-        razorpayResponse.razorpay_order_id,
-        razorpayResponse.razorpay_payment_id,
-        razorpayResponse.razorpay_signature,
-        paymentId
-      );
+      // Verify payment - use appropriate verification based on plan type
+      let verifyResponse;
+      if (useAddonPayment) {
+        verifyResponse = await verifyAddonPayment(
+          razorpayResponse.razorpay_order_id,
+          razorpayResponse.razorpay_payment_id,
+          razorpayResponse.razorpay_signature,
+          paymentId
+        );
+      } else {
+        verifyResponse = await verifyPayment(
+          razorpayResponse.razorpay_order_id,
+          razorpayResponse.razorpay_payment_id,
+          razorpayResponse.razorpay_signature,
+          paymentId
+        );
+      }
 
       if (verifyResponse.success) {
         // If it's a custom plan, mark it as purchased locally

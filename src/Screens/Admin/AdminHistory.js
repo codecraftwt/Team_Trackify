@@ -148,50 +148,50 @@ const AdminHistory = ({ navigation, route }) => {
   //   return true;
   // };
   // Check subscription with appropriate message
-  const checkSubscription = useCallback(async () => {
-    let currentSubscriptionStatus = subscriptionStatus;
+  // const checkSubscription = useCallback(async () => {
+  //   let currentSubscriptionStatus = subscriptionStatus;
 
-    if (!currentSubscriptionStatus) {
-      try {
-        const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
-        if (storedStatus) {
-          currentSubscriptionStatus = JSON.parse(storedStatus);
-        }
-      } catch (error) {
-        console.error('Error loading subscription status:', error);
-      }
-    }
+  //   if (!currentSubscriptionStatus) {
+  //     try {
+  //       const storedStatus = await AsyncStorage.getItem('subscriptionStatus');
+  //       if (storedStatus) {
+  //         currentSubscriptionStatus = JSON.parse(storedStatus);
+  //       }
+  //     } catch (error) {
+  //       console.error('Error loading subscription status:', error);
+  //     }
+  //   }
 
-    if (userRole === 'Admin' && isSubscriptionExpired(currentSubscriptionStatus)) {
-      const neverHadPlan = !currentSubscriptionStatus?.currentPaymentId;
-      const message = neverHadPlan
-        ? 'Please buy a plan to add or manage users'
-        : 'Your plan has expired. Please renew to continue managing users.';
+  //   if (userRole === 'Admin' && isSubscriptionExpired(currentSubscriptionStatus)) {
+  //     const neverHadPlan = !currentSubscriptionStatus?.currentPaymentId;
+  //     const message = neverHadPlan
+  //       ? 'Please buy a plan to add or manage users'
+  //       : 'Your plan has expired. Please renew to continue managing users.';
 
-      Alert.alert(
-        'Subscription Required',
-        message,
-        [
-          {
-            text: 'Go to Plans',
-            onPress: () => navigation.navigate('ManagePlans'),
-          },
-          {
-            text: 'Go to Dashboard',
-            onPress: () => navigation.navigate('AdminDashboard'),
-          },
-        ],
-        { cancelable: false }
-      );
-      return false;
-    }
-    return true;
-  }, [userRole, navigation, subscriptionStatus]);
+  //     Alert.alert(
+  //       'Subscription Required',
+  //       message,
+  //       [
+  //         {
+  //           text: 'Go to Plans',
+  //           onPress: () => navigation.navigate('ManagePlans'),
+  //         },
+  //         {
+  //           text: 'Cancel',
+  //           onPress: () => navigation.navigate('AdminDashboard'),
+  //         },
+  //       ],
+  //       { cancelable: false }
+  //     );
+  //     return false;
+  //   }
+  //   return true;
+  // }, [userRole, navigation, subscriptionStatus]);
 
-  // Check subscription on mount
-  useEffect(() => {
-    checkSubscription();
-  }, [subscriptionStatus]);
+  // // Check subscription on mount
+  // useEffect(() => {
+  //   checkSubscription();
+  // }, [subscriptionStatus]);
 
   // Edit user form state
   const [editUserData, setEditUserData] = useState({
