@@ -536,7 +536,9 @@ const renderRouteMarkers = (keyPrefix) => (
         pinColor="#FF8C00"
         title="Photo Location"
         description={
-          loc.remark != null ? String(loc.remark).trim() || undefined : undefined
+          loc.remark != null && String(loc.remark).trim() !== '' 
+            ? String(loc.remark).trim() 
+            : 'Photo point'
         }
         onPress={() => {
           console.log('Photo marker pressed - location data:', loc);

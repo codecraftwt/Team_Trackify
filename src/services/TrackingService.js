@@ -516,7 +516,16 @@ export const startSessionOfflineFirst = async (photoFile, locationData = null) =
 };
 
 export const addLocationOfflineFirst = async (sessionId, locationData, formData) => {
-  const isOnline = locationData.isOnline ?? false;
+  // Always check actual network status to ensure accurate isOnline field
+  let actualIsOnline = false;
+  try {
+    const { isOnline: checkOnline } = await import('./SyncService');
+    actualIsOnline = await checkOnline();
+  } catch {
+    // If network check fails, use the provided value as fallback
+    actualIsOnline = locationData.isOnline ?? false;
+  }
+  
   const locationPayload = {
     sessionLocalId: sessionId,
     latitude: locationData.latitude,
@@ -533,7 +542,7 @@ export const addLocationOfflineFirst = async (sessionId, locationData, formData)
     remark: locationData.remark ?? null,
     amount: locationData.amount ?? null,
     photoUri: locationData.photoUri ?? null,
-    isOnline,
+    isOnline: actualIsOnline,
   };
   
   // console.log('Saving location to offline store:', {
@@ -551,7 +560,7 @@ export const addLocationOfflineFirst = async (sessionId, locationData, formData)
   }
   
   try {
-    formData.append('isOnline', isOnline ? 'true' : 'false');
+    formData.append('isOnline', actualIsOnline ? 'true' : 'false');
     const result = await addLocationWithFormData(sessionId, formData);
     if (result.success) {
       await markLocationSynced(pointId);
@@ -645,7 +654,16 @@ export const addLocationWithPhotoOfflineFirst = async (sessionId, locationData, 
     }
   }
 
-  const isOnline = locationData.isOnline ?? false;
+  // Always check actual network status to ensure accurate isOnline field
+  let actualIsOnline = false;
+  try {
+    const { isOnline: checkOnline } = await import('./SyncService');
+    actualIsOnline = await checkOnline();
+  } catch {
+    // If network check fails, use the provided value as fallback
+    actualIsOnline = locationData.isOnline ?? false;
+  }
+  
   const locationPayload = {
     sessionLocalId: sessionId,
     latitude,
@@ -662,7 +680,7 @@ export const addLocationWithPhotoOfflineFirst = async (sessionId, locationData, 
     remark,
     amount,
     photoUri: persistedPhotoPath,
-    isOnline,
+    isOnline: actualIsOnline,
   };
 
   const pointId = await saveLocationPoint(locationPayload);
@@ -746,13 +764,31 @@ export const endSessionOfflineFirst = async (sessionId, photoFile, locationData 
   if (isLocalSessionId(sessionId)) {
     return { success: true, storedOffline: true };
   }
-  try {
-    const data = await endSession(sessionId, photoFile, locationData);
-    return data;
-  } catch (error) {
-    console.warn('End session API failed (offline?), session saved locally:', error?.message);
-    return { success: true, storedOffline: true };
+  
+  // For server sessions, try to end on server with retry logic
+  let serverEndSuccess = false;
+  let serverError = null;
+  
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const data = await endSession(sessionId, photoFile, locationData);
+      serverEndSuccess = true;
+      console.log('[TrackingService] Successfully ended session on server:', sessionId);
+      return data;
+    } catch (error) {
+      serverError = error;
+      console.warn(`[TrackingService] End session API failed (attempt ${attempt}/2):`, error?.message);
+      if (attempt < 2) {
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
   }
+  
+  // If server end failed after retries, session is still ended locally
+  // The sync process will retry ending on server later
+  console.warn('[TrackingService] End session API failed after retries, session saved locally:', serverError?.message);
+  return { success: true, storedOffline: true, serverEndFailed: true };
 };
 
 export const endSession = async (sessionId, photoFile, locationData = null) => {

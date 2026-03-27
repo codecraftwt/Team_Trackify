@@ -8,6 +8,38 @@ const bgLocationModule = NativeModules.BgLocationModule;
 const toNullableNumber = value =>
   typeof value === 'number' && !Number.isNaN(value) ? value : null;
 
+const normalizeTimestamp = value => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 0 && value < 1e12 ? value * 1000 : value;
+  }
+  if (typeof value === 'string') {
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber)) {
+      return asNumber > 0 && asNumber < 1e12 ? asNumber * 1000 : asNumber;
+    }
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return Date.now();
+};
+
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3;
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+  return R * c;
+};
+
 const coercePoint = point => {
   if (!point) {
     return null;
@@ -182,10 +214,39 @@ export const syncNativeBufferedPointsForSession = async sessionId => {
   }
 
   let inserted = 0;
+  let lastPoint = null;
+  const MIN_ACCURACY_METERS = 60;
+  const MAX_TELEPORT_DISTANCE_METERS = 500;
+  const MAX_REALISTIC_SPEED_MPS = 70;
 
   for (const point of normalized) {
     const { latitude, longitude, timestamp, accuracy, source } = point;
-    const ts = Number(timestamp) || Date.now();
+    const ts = normalizeTimestamp(timestamp);
+
+    // Filter out inaccurate locations
+    if (accuracy != null && accuracy > MIN_ACCURACY_METERS) {
+      console.warn(`[BGTRACK_NATIVE] Skipping inaccurate point: ${accuracy}m (threshold: ${MIN_ACCURACY_METERS}m)`);
+      continue;
+    }
+
+    // Teleport detection
+    if (lastPoint) {
+      const distance = calculateDistance(
+        lastPoint.latitude,
+        lastPoint.longitude,
+        latitude,
+        longitude
+      );
+      const elapsedMs = Math.max(1, ts - lastPoint.timestamp);
+      const speedMps = distance / (elapsedMs / 1000);
+      const looksLikeTeleport =
+        distance > MAX_TELEPORT_DISTANCE_METERS && speedMps > MAX_REALISTIC_SPEED_MPS;
+
+      if (looksLikeTeleport) {
+        console.warn(`[BGTRACK_NATIVE] Teleport detected (${distance.toFixed(0)}m in ${(elapsedMs/1000).toFixed(1)}s = ${speedMps.toFixed(1)} m/s), skipping`);
+        continue;
+      }
+    }
 
     const locationData = {
       latitude,
@@ -205,7 +266,7 @@ export const syncNativeBufferedPointsForSession = async sessionId => {
     const formData = new FormData();
     formData.append('latitude', String(latitude));
     formData.append('longitude', String(longitude));
-    formData.append('timestamp', String(ts));
+    formData.append('timestamp', String(normalizeTimestamp(ts)));
     formData.append('address', locationData.address);
     formData.append('road', locationData.road);
     formData.append('area', locationData.area);
@@ -225,6 +286,7 @@ export const syncNativeBufferedPointsForSession = async sessionId => {
       );
       if (result?.success) {
         inserted += 1;
+        lastPoint = { latitude, longitude, timestamp: ts };
       }
     } catch (error) {
       console.warn(

@@ -311,7 +311,9 @@ const SessionDetailsMap = () => {
           pinColor="#DC2626"
           title="Photo Location"
           description={
-            loc.remark != null ? String(loc.remark).trim() || undefined : undefined
+            loc.remark != null && String(loc.remark).trim() !== '' 
+              ? String(loc.remark).trim() 
+              : 'Photo point'
           }
           // Ensure photo markers don't cover start/end markers.
           zIndex={200}

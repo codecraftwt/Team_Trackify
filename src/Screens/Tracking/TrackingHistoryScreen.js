@@ -17,11 +17,6 @@ import * as TrackingService from '../../services/TrackingService';
 import CustomHeader from '../../Component/CustomHeader';
 import { useAuth } from '../../config/auth-context';
 
-// const formatTime = (iso) => {
-//   if (!iso) return '—';
-//   const d = new Date(iso);
-//   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-// };
 const formatTime = (iso) => {
   if (!iso) return '—';
 
@@ -162,20 +157,13 @@ const TrackingHistoryScreen = ({ route }) => {
   // Fetch tracking dates for calendar using TrackingService
   const fetchTrackingDates = async () => {
     if (!targetUserId) {
-      console.log('fetchTrackingDates: no targetUserId found', {
-        routeUserId: route?.params?.userId,
-        profileId: userProfile?.id,
-        authUserId,
-      });
       return;
     }
 
     setLoadingCalendar(true);
     try {
       // Using the TrackingService function
-      console.log('Fetching tracking dates for userId:', targetUserId);
       const dates = await TrackingService.getUserTrackingDates(targetUserId);
-      console.log('Dates from API:', dates); // Debug log
 
       const marked = {};
 
@@ -197,7 +185,6 @@ const TrackingHistoryScreen = ({ route }) => {
         selectedTextColor: '#ffffff',
       };
 
-      console.log('Marked dates:', marked); // Debug log
       setMarkedDates(marked);
     } catch (error) {
       console.error('Error fetching tracking dates:', error);
@@ -268,7 +255,6 @@ const TrackingHistoryScreen = ({ route }) => {
           setHasMore(hasMoreFromApi);
         }
       } catch (e) {
-        console.log('Session history error', e);
         try {
           const fallback = await TrackingService.getSessions({
             page: 1,
@@ -501,19 +487,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#f4f6f8',
     paddingHorizontal: wp(4),
   },
-
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   loadingText: {
     marginTop: 10,
     fontSize: 16,
     color: '#6b7280',
   },
-
   summaryCard: {
     borderRadius: 18,
     paddingVertical: hp(2.4),
@@ -528,7 +511,6 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 6,
   },
-
   summaryDistance: {
     fontSize: wp(10),
     fontWeight: '700',
@@ -541,12 +523,10 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     marginTop: hp(0.5),
   },
-
   listContent: {
     paddingTop: hp(0.5),
     paddingBottom: hp(4),
   },
-
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 18,
@@ -560,21 +540,17 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
-
   cardInactive: {
     borderLeftColor: '#0f5fc5', // blue for completed sessions
   },
-
   cardActive: {
     borderLeftColor: '#22c55e', // green for active session
   },
-
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: 10,
   },
-
   cardHeaderIconWrap: {
     width: 30,
     height: 30,
@@ -584,31 +560,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 10,
   },
-
   cardHeaderTime: {
     fontSize: 15,
     fontWeight: '700',
     color: '#566000',
   },
-
   cardDivider: {
     height: 1,
     backgroundColor: '#e5e7eb',
     marginVertical: 8,
   },
-
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
   },
-
   infoText: {
     marginLeft: 10,
     fontSize: 13,
     color: '#4b5563',
   },
-
   roundIconBlue: {
     width: 26,
     height: 26,
@@ -617,7 +588,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   roundIconOrange: {
     width: 26,
     height: 26,
@@ -626,7 +596,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   detailsButton: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -638,25 +607,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d0e0ff',
   },
-
   detailsText: {
     marginLeft: 8,
     fontSize: 14,
     fontWeight: '600',
     color: '#2563eb',
   },
-
   empty: {
     alignItems: 'center',
     marginTop: hp(15),
   },
-
   emptyText: {
     marginTop: 10,
     fontSize: 16,
     color: '#6b7280',
   },
-
   emptySubtext: {
     marginTop: 4,
     fontSize: 14,

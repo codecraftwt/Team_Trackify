@@ -12,12 +12,58 @@ import {
   relocatePointsToSession,
 } from './OfflineLocationStore';
 
-let isSyncing = false;
-let syncPromise = null; // Store the sync promise to prevent concurrent syncs
-let netInfoListener = null; // Store NetInfo listener to prevent duplicates
-let lastSyncTime = 0; // Track last sync time for debouncing
 const SYNC_DEBOUNCE_MS = 5000; // Minimum 5 seconds between sync triggers
-let syncLock = false; // Additional lock to prevent any concurrent syncs
+const LOCK_TIMEOUT_MS = 30000; // 30 seconds timeout for session creation locks
+
+// IMPORTANT:
+// This module can be loaded more than once in some bundling/dev scenarios.
+// Store sync state on globalThis so locks are shared and we don't create duplicate server sessions.
+const getSyncState = () => {
+  const g = globalThis;
+  if (!g.__trackifySyncState) {
+    g.__trackifySyncState = {
+      isSyncing: false,
+      syncPromise: null,
+      netInfoListener: null,
+      lastSyncTime: 0,
+      syncLock: false,
+      // Map<localSessionId, { timestamp: number, promise: Promise<string|null> }>
+      sessionCreationLocks: new Map(),
+    };
+  }
+  return g.__trackifySyncState;
+};
+
+// Helper to clean up stale locks (older than LOCK_TIMEOUT_MS)
+const cleanupStaleLocks = () => {
+  const { sessionCreationLocks } = getSyncState();
+  const now = Date.now();
+  for (const [key, lockInfo] of sessionCreationLocks.entries()) {
+    if (typeof lockInfo === 'object' && lockInfo.timestamp && now - lockInfo.timestamp > LOCK_TIMEOUT_MS) {
+      console.warn('[SyncService] Cleaning up stale lock for:', key);
+      sessionCreationLocks.delete(key);
+    }
+  }
+};
+
+// Helper function to end session on server with retry logic
+const endSessionOnServerWithRetry = async (serverSessionId, punchOutPhoto, maxRetries = 2) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await TrackingService.endSession(serverSessionId, punchOutPhoto);
+      console.log('[SyncService] Successfully ended session on server:', serverSessionId);
+      return { success: true };
+    } catch (err) {
+      console.warn(`[SyncService] Failed to end session on server (attempt ${attempt}/${maxRetries}):`, err?.message);
+      if (attempt === maxRetries) {
+        return { success: false, error: err?.message };
+      }
+      // Wait before retrying (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+  return { success: false, error: 'Max retries exceeded' };
+};
 
 export const isOnline = async () => {
   const state = await NetInfo.fetch();
@@ -25,19 +71,20 @@ export const isOnline = async () => {
 };
 
 export const syncPendingLocations = async () => {
+  const state = getSyncState();
   // If already syncing or sync lock is active, return the existing promise to avoid duplicate syncs
-  if ((isSyncing && syncPromise) || syncLock) {
+  if ((state.isSyncing && state.syncPromise) || state.syncLock) {
     console.log('[SyncService] Sync already in progress or locked, waiting for it to complete...');
-    if (syncPromise) {
-      return syncPromise;
+    if (state.syncPromise) {
+      return state.syncPromise;
     }
     return { success: false, synced: 0, reason: 'locked' };
   }
 
   // Debounce: prevent sync from being triggered too frequently
   const now = Date.now();
-  if (now - lastSyncTime < SYNC_DEBOUNCE_MS) {
-    console.log('[SyncService] Sync debounced, last sync was', Math.round((now - lastSyncTime) / 1000), 'seconds ago');
+  if (now - state.lastSyncTime < SYNC_DEBOUNCE_MS) {
+    console.log('[SyncService] Sync debounced, last sync was', Math.round((now - state.lastSyncTime) / 1000), 'seconds ago');
     return { success: false, synced: 0, reason: 'debounced' };
   }
 
@@ -48,33 +95,40 @@ export const syncPendingLocations = async () => {
   }
 
   // Set isSyncing AND syncLock BEFORE anything else to prevent race conditions
-  isSyncing = true;
-  syncLock = true;
-  lastSyncTime = now;
+  state.isSyncing = true;
+  state.syncLock = true;
+  state.lastSyncTime = now;
   let totalSynced = 0;
 
   // Create the sync promise and store it to prevent concurrent syncs
-  syncPromise = (async () => {
+  state.syncPromise = (async () => {
     try {
       console.log('[SyncService] Starting sync...');
       const sessionsWithUnsynced = await getAllSessionsWithUnsyncedLocations();
       console.log('[SyncService] Found sessions with unsynced locations:', sessionsWithUnsynced.length);
 
-      // Deduplicate sessions - if multiple sessions have similar start times (within 5 minutes),
+      // Split sessions:
+      // - dedupCandidates: sessions that have unsynced points (relocation + server uploads)
+      // - nonDedupSessions: sessions without unsynced points (may still need server "end" if status === 'ended')
+      const dedupCandidates = sessionsWithUnsynced.filter(s => s.unsyncedCount > 0);
+      const nonDedupSessions = sessionsWithUnsynced.filter(s => s.unsyncedCount <= 0);
+
+      // Deduplicate sessions - if multiple sessions have similar start times (within 1 minute),
       // treat them as the same session and only create one server session
       const deduplicatedSessions = [];
       const processedStarts = new Map(); // Track start times to session mapping
       const duplicateSessions = []; // Track duplicate sessions for point relocation
       
-      for (const { session, unsyncedCount } of sessionsWithUnsynced) {
+      for (const { session, unsyncedCount } of dedupCandidates) {
         const sessionStartTime = session.startTime;
         
         // Check if there's already a session being processed with a similar start time
         let existingSession = null;
         for (const [startTime, existing] of processedStarts) {
           const timeDiff = Math.abs(sessionStartTime - startTime);
-          // If sessions are within 5 minutes of each other, consider them duplicates
-          if (timeDiff < 5 * 60 * 1000) {
+          // If sessions are within 1 minute of each other, consider them duplicates
+          // Reduced from 5 minutes to prevent false positives
+          if (timeDiff < 60 * 1000) {
             existingSession = existing;
             break;
           }
@@ -82,11 +136,12 @@ export const syncPendingLocations = async () => {
         
         if (existingSession) {
           console.log('[SyncService] Marking duplicate session:', session.localSessionId, 
-            '(within 5 min of existing session)', existingSession.localSessionId);
+            '(within 1 min of existing session)', existingSession.localSessionId);
           // Mark this session as a duplicate for point relocation
           duplicateSessions.push({ duplicate: session, main: existingSession });
         } else {
           processedStarts.set(sessionStartTime, session);
+          // We already filtered to unsynced sessions, so unsyncedCount is > 0
           deduplicatedSessions.push({ session, unsyncedCount });
         }
       }
@@ -111,9 +166,11 @@ export const syncPendingLocations = async () => {
         console.log('[SyncService] Marked duplicate session as synced:', duplicate.localSessionId);
       }
 
-      console.log('[SyncService] After deduplication:', deduplicatedSessions.length, 'sessions to process');
+      const sessionsToProcess = [...deduplicatedSessions, ...nonDedupSessions];
 
-      for (const { session, unsyncedCount } of deduplicatedSessions) {
+      console.log('[SyncService] After deduplication:', sessionsToProcess.length, 'sessions to process');
+
+      for (const { session, unsyncedCount } of sessionsToProcess) {
         console.log('[SyncService] ===========================================');
         console.log('[SyncService] Processing session:', session.localSessionId);
         console.log('[SyncService] - unsyncedCount:', unsyncedCount);
@@ -122,7 +179,9 @@ export const syncPendingLocations = async () => {
         console.log('[SyncService] - synced:', session.synced);
         console.log('[SyncService] ===========================================');
         
-        if (unsyncedCount === 0 && session.synced) continue;
+        // If there are no unsynced points, we normally skip.
+        // But if the local session is ended, we still need to call the server "end" API.
+        if (unsyncedCount === 0 && session.synced && session.status !== 'ended') continue;
 
         // Re-fetch session from database to get the latest state
         // This prevents creating duplicate server sessions if another sync process updated it
@@ -131,113 +190,174 @@ export const syncPendingLocations = async () => {
         
         console.log('[SyncService] Current serverSessionId after re-fetch:', serverSessionId);
 
-        // Double-check if another concurrent process already created the session
-        // by querying again just before creating (with a small delay if needed)
+        // Use per-session lock to prevent concurrent session creation for the same local session.
+        // This must be global (shared across module instances) and promise-based (waiters await the same creation).
         if (!serverSessionId) {
-          // Add a small delay to allow any concurrent operations to complete
-          await new Promise(resolve => setTimeout(resolve, 100));
-          const recheckSession = await getSessionByLocalId(session.localSessionId);
-          serverSessionId = recheckSession?.serverSessionId;
-          console.log('[SyncService] ServerSessionId after recheck:', serverSessionId);
-        }
-
-        // If this session does not yet exist on the server (including
-        // purely offline "local_*" sessions), create it now and link
-        // it to the local session so all buffered points can be synced.
-        if (!serverSessionId) {
-          // For offline sessions, get the punch-in photo from session record
-          try {
-            let photoFile = null;
+          const lockKey = session.localSessionId;
+          const lockMap = state.sessionCreationLocks;
+          
+          // Check if another process is already creating this session
+          if (lockMap.has(lockKey)) {
+            const lockInfo = lockMap.get(lockKey);
+            const lockAge = typeof lockInfo === 'object' && lockInfo.timestamp ? Date.now() - lockInfo.timestamp : 0;
             
-            // Use currentSession for photo URI since it might have been updated
-            const sessionForPhoto = currentSession || session;
-            // Get punch-in photo from session record
-            const punchInPhotoUri = sessionForPhoto.punchInPhotoUri;
-            console.log('[SyncService] Punch-in photo URI from session:', punchInPhotoUri);
-            
-            if (punchInPhotoUri) {
-              const photoPath = punchInPhotoUri.startsWith('file://') 
-                ? punchInPhotoUri.replace('file://', '') 
-                : punchInPhotoUri;
+            // If lock is stale (older than timeout), remove it
+            if (lockAge > LOCK_TIMEOUT_MS) {
+              console.warn('[SyncService] Removing stale lock for:', lockKey, 'age:', lockAge, 'ms');
+              lockMap.delete(lockKey);
+            } else {
+              console.log('[SyncService] Another process is already creating session for:', lockKey, 'awaiting...');
               try {
-                const photoFileExists = await RNFS.exists(photoPath);
-                if (photoFileExists) {
-                  photoFile = {
-                    uri: punchInPhotoUri.startsWith('file://') ? punchInPhotoUri : `file://${photoPath}`,
-                    fileName: punchInPhotoUri.split('/').pop() || `photo_${session.startTime}.jpg`,
-                    type: 'image/jpeg',
-                  };
-                  console.log('[SyncService] Found punch-in photo:', photoFile.fileName);
-                }
+                // Await the creator promise, then re-check DB (WatermelonDB updates may not be immediate).
+                await Promise.race([
+                  lockInfo?.promise,
+                  new Promise((_, reject) => setTimeout(() => reject(new Error('lock-timeout')), 12000)),
+                ]);
               } catch {
-                console.log('[SyncService] Photo file does not exist:', photoPath);
+                // ignore timeout, we'll re-check below
               }
-            } else {
-              console.log('[SyncService] No punch-in photo in session, checking location points...');
-              // Fallback: check location points for photo
-              const sessionForLocations = currentSession || session;
-              const allLocations = await getAllLocationsForSession(sessionForLocations.localSessionId);
-              const startPoint = allLocations.find(p => p.source === 'start' && p.photoUri) 
-                || (allLocations.length > 0 ? allLocations[0] : null);
-              if (startPoint?.photoUri) {
-                const photoPath = startPoint.photoUri.startsWith('file://') 
-                  ? startPoint.photoUri.replace('file://', '') 
-                  : startPoint.photoUri;
-                try {
-                  const photoFileExists = await RNFS.exists(photoPath);
-                  if (photoFileExists) {
-                    photoFile = {
-                      uri: startPoint.photoUri.startsWith('file://') ? startPoint.photoUri : `file://${photoPath}`,
-                      fileName: startPoint.photoUri.split('/').pop() || `photo_${startPoint.timestamp}.jpg`,
-                      type: 'image/jpeg',
-                    };
-                    console.log('[SyncService] Found punch-in photo from location:', photoFile.fileName);
+
+              // Poll a bit for DB to reflect the updateSessionServerId write.
+              const pollStart = Date.now();
+              while (!serverSessionId && Date.now() - pollStart < 3000) {
+                const recheckSession = await getSessionByLocalId(session.localSessionId);
+                serverSessionId = recheckSession?.serverSessionId;
+                if (serverSessionId) break;
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+              console.log('[SyncService] ServerSessionId after awaiting lock:', serverSessionId);
+            }
+          }
+          
+          // If still no server session ID, acquire lock and create it
+          if (!serverSessionId) {
+            // Clean up stale locks before acquiring new one
+            cleanupStaleLocks();
+            
+            // Acquire lock with a promise so all waiters share one creation.
+            let resolveLock = null;
+            const creationPromise = new Promise(resolve => {
+              resolveLock = resolve;
+            });
+            lockMap.set(lockKey, { timestamp: Date.now(), promise: creationPromise });
+            console.log('[SyncService] Acquired session creation lock for:', lockKey);
+            
+            try {
+              // Double-check one more time after acquiring lock
+              const recheckAfterLock = await getSessionByLocalId(session.localSessionId);
+              serverSessionId = recheckAfterLock?.serverSessionId;
+              
+              if (!serverSessionId) {
+                // For offline sessions, get the punch-in photo from session record
+                let photoFile = null;
+                
+                // Use currentSession for photo URI since it might have been updated
+                const sessionForPhoto = currentSession || session;
+                // Get punch-in photo from session record
+                const punchInPhotoUri = sessionForPhoto.punchInPhotoUri;
+                console.log('[SyncService] Punch-in photo URI from session:', punchInPhotoUri);
+                
+                if (punchInPhotoUri) {
+                  const photoPath = punchInPhotoUri.startsWith('file://') 
+                    ? punchInPhotoUri.replace('file://', '') 
+                    : punchInPhotoUri;
+                  try {
+                    const photoFileExists = await RNFS.exists(photoPath);
+                    if (photoFileExists) {
+                      photoFile = {
+                        uri: punchInPhotoUri.startsWith('file://') ? punchInPhotoUri : `file://${photoPath}`,
+                        fileName: punchInPhotoUri.split('/').pop() || `photo_${session.startTime}.jpg`,
+                        type: 'image/jpeg',
+                      };
+                      console.log('[SyncService] Found punch-in photo:', photoFile.fileName);
+                    }
+                  } catch {
+                    console.log('[SyncService] Photo file does not exist:', photoPath);
                   }
-                } catch {}
-              }
-            }
-            
-            // Try to create session with the punch-in photo
-            let res;
-            if (photoFile) {
-              try {
-                console.log('[SyncService] Creating session with punch-in photo...');
-                res = await TrackingService.startSession(photoFile);
-                console.log('[SyncService] Session created with photo, result:', res);
-              } catch (photoErr) {
-                console.log('[SyncService] Could not create session with photo:', photoErr?.message);
-                // Try direct creation as fallback
-                try {
-                  res = await TrackingService.createSessionDirectly();
-                } catch (directErr) {
-                  console.log('[SyncService] Direct creation also failed:', directErr?.message);
-                  throw directErr;
+                } else {
+                  console.log('[SyncService] No punch-in photo in session, checking location points...');
+                  // Fallback: check location points for photo
+                  const sessionForLocations = currentSession || session;
+                  const allLocations = await getAllLocationsForSession(sessionForLocations.localSessionId);
+                  const startPoint = allLocations.find(p => p.source === 'start' && p.photoUri) 
+                    || (allLocations.length > 0 ? allLocations[0] : null);
+                  if (startPoint?.photoUri) {
+                    const photoPath = startPoint.photoUri.startsWith('file://') 
+                      ? startPoint.photoUri.replace('file://', '') 
+                      : startPoint.photoUri;
+                    try {
+                      const photoFileExists = await RNFS.exists(photoPath);
+                      if (photoFileExists) {
+                        photoFile = {
+                          uri: startPoint.photoUri.startsWith('file://') ? startPoint.photoUri : `file://${photoPath}`,
+                          fileName: startPoint.photoUri.split('/').pop() || `photo_${startPoint.timestamp}.jpg`,
+                          type: 'image/jpeg',
+                        };
+                        console.log('[SyncService] Found punch-in photo from location:', photoFile.fileName);
+                      }
+                    } catch {}
+                  }
                 }
+                
+                // Try to create session with the punch-in photo
+                let res;
+                if (photoFile) {
+                  try {
+                    console.log('[SyncService] Creating session with punch-in photo...');
+                    res = await TrackingService.startSession(photoFile);
+                    console.log('[SyncService] Session created with photo, result:', res);
+                  } catch (photoErr) {
+                    console.log('[SyncService] Could not create session with photo:', photoErr?.message);
+                    // Try direct creation as fallback
+                    try {
+                      res = await TrackingService.createSessionDirectly();
+                    } catch (directErr) {
+                      console.log('[SyncService] Direct creation also failed:', directErr?.message);
+                      throw directErr;
+                    }
+                  }
+                } else {
+                  // No photo available, try direct creation
+                  console.log('[SyncService] No photo available, trying createSessionDirectly...');
+                  try {
+                    res = await TrackingService.createSessionDirectly();
+                  } catch (directErr) {
+                    console.log('[SyncService] Direct creation failed:', directErr?.message);
+                    throw directErr;
+                  }
+                }
+                
+                serverSessionId = res?.sessionId;
+                console.log('[SyncService] Created server session:', serverSessionId);
+                
+                if (serverSessionId) {
+                  // Double-check that no other process already linked this session
+                  const recheckAfterCreate = await getSessionByLocalId(session.localSessionId);
+                  if (recheckAfterCreate?.serverSessionId && recheckAfterCreate.serverSessionId !== serverSessionId) {
+                    console.warn('[SyncService] Session was already linked by another process to:', recheckAfterCreate.serverSessionId);
+                    // Use the existing server session ID instead
+                    serverSessionId = recheckAfterCreate.serverSessionId;
+                  } else {
+                    console.log('[SyncService] Linking local session to server session...');
+                    await updateSessionServerId(session.localSessionId, serverSessionId);
+                    console.log('[SyncService] Session linked successfully');
+                  }
+                } else {
+                  console.warn('[SyncService] No sessionId returned from server!');
+                }
+              } else {
+                console.log('[SyncService] Session was already created by another process:', serverSessionId);
               }
-            } else {
-              // No photo available, try direct creation
-              console.log('[SyncService] No photo available, trying createSessionDirectly...');
-              try {
-                res = await TrackingService.createSessionDirectly();
-              } catch (directErr) {
-                console.log('[SyncService] Direct creation failed:', directErr?.message);
-                throw directErr;
-              }
+              resolveLock?.(serverSessionId || null);
+            } catch (err) {
+              console.warn('SyncService: Failed to create session on server:', err?.message);
+              resolveLock?.(null);
+              continue;
+            } finally {
+              // Always release the lock
+              lockMap.delete(lockKey);
+              console.log('[SyncService] Released session creation lock for:', lockKey);
             }
-            
-            serverSessionId = res?.sessionId;
-            console.log('[SyncService] Created server session:', serverSessionId);
-            
-            if (serverSessionId) {
-              console.log('[SyncService] Linking local session to server session...');
-              await updateSessionServerId(session.localSessionId, serverSessionId);
-              console.log('[SyncService] Session linked successfully');
-            } else {
-              console.warn('[SyncService] No sessionId returned from server!');
-            }
-          } catch (err) {
-            console.warn('SyncService: Failed to create session on server:', err?.message);
-            continue;
           }
         }
 
@@ -310,32 +430,73 @@ export const syncPendingLocations = async () => {
         if (sessionToEnd.status === 'ended') {
           console.log('[SyncService] Session is ended locally, ending on server...');
           
-          // Try to get punch-out photo from session
-          let punchOutPhoto = null;
-          if (sessionToEnd.punchOutPhotoUri) {
-            const photoPath = sessionToEnd.punchOutPhotoUri.startsWith('file://') 
-              ? sessionToEnd.punchOutPhotoUri.replace('file://', '') 
-              : sessionToEnd.punchOutPhotoUri;
+          // First check if session is still active on server before trying to end it
+          try {
+            const serverSession = await TrackingService.getSessionDetails(serverSessionId);
+            if (serverSession && serverSession.isActive === false) {
+              console.log('[SyncService] Session is already ended on server, skipping end call');
+            } else {
+              // Try to get punch-out photo from session
+              let punchOutPhoto = null;
+              if (sessionToEnd.punchOutPhotoUri) {
+                const photoPath = sessionToEnd.punchOutPhotoUri.startsWith('file://') 
+                  ? sessionToEnd.punchOutPhotoUri.replace('file://', '') 
+                  : sessionToEnd.punchOutPhotoUri;
+                try {
+                  const photoFileExists = await RNFS.exists(photoPath);
+                  if (photoFileExists) {
+                    punchOutPhoto = {
+                      uri: sessionToEnd.punchOutPhotoUri.startsWith('file://') ? sessionToEnd.punchOutPhotoUri : `file://${photoPath}`,
+                      fileName: sessionToEnd.punchOutPhotoUri.split('/').pop() || `punchout_${sessionToEnd.endTime}.jpg`,
+                      type: 'image/jpeg',
+                    };
+                    console.log('[SyncService] Found punch-out photo:', punchOutPhoto.fileName);
+                  }
+                } catch (err) {
+                  console.log('[SyncService] Punch-out photo not found:', err?.message);
+                }
+              }
+              
+              // Use retry helper to end session
+              const endResult = await endSessionOnServerWithRetry(serverSessionId, punchOutPhoto);
+              if (!endResult.success) {
+                console.warn('[SyncService] Failed to end session after retries:', endResult.error);
+                // Don't throw - session is already ended locally, will retry on next sync
+              }
+            }
+          } catch (checkErr) {
+            console.warn('[SyncService] Failed to check session status on server:', checkErr?.message);
+            // If we can't check status, try to end anyway with retry
             try {
-              const photoFileExists = await RNFS.exists(photoPath);
-              if (photoFileExists) {
-                punchOutPhoto = {
-                  uri: sessionToEnd.punchOutPhotoUri.startsWith('file://') ? sessionToEnd.punchOutPhotoUri : `file://${photoPath}`,
-                  fileName: sessionToEnd.punchOutPhotoUri.split('/').pop() || `punchout_${sessionToEnd.endTime}.jpg`,
-                  type: 'image/jpeg',
-                };
-                console.log('[SyncService] Found punch-out photo:', punchOutPhoto.fileName);
+              // Try to get punch-out photo from session
+              let punchOutPhoto = null;
+              if (sessionToEnd.punchOutPhotoUri) {
+                const photoPath = sessionToEnd.punchOutPhotoUri.startsWith('file://') 
+                  ? sessionToEnd.punchOutPhotoUri.replace('file://', '') 
+                  : sessionToEnd.punchOutPhotoUri;
+                try {
+                  const photoFileExists = await RNFS.exists(photoPath);
+                  if (photoFileExists) {
+                    punchOutPhoto = {
+                      uri: sessionToEnd.punchOutPhotoUri.startsWith('file://') ? sessionToEnd.punchOutPhotoUri : `file://${photoPath}`,
+                      fileName: sessionToEnd.punchOutPhotoUri.split('/').pop() || `punchout_${sessionToEnd.endTime}.jpg`,
+                      type: 'image/jpeg',
+                    };
+                    console.log('[SyncService] Found punch-out photo:', punchOutPhoto.fileName);
+                  }
+                } catch (err) {
+                  console.log('[SyncService] Punch-out photo not found:', err?.message);
+                }
+              }
+              
+              // Use retry helper to end session
+              const endResult = await endSessionOnServerWithRetry(serverSessionId, punchOutPhoto);
+              if (!endResult.success) {
+                console.warn('[SyncService] Failed to end session after retries:', endResult.error);
               }
             } catch (err) {
-              console.log('[SyncService] Punch-out photo not found:', err?.message);
+              console.warn('SyncService: Failed to end session:', err?.message);
             }
-          }
-          
-          try {
-            await TrackingService.endSession(serverSessionId, punchOutPhoto);
-            console.log('[SyncService] Ended session on server:', serverSessionId);
-          } catch (err) {
-            console.warn('SyncService: Failed to end session:', err?.message);
           }
         }
       }
@@ -346,23 +507,24 @@ export const syncPendingLocations = async () => {
       console.error('SyncService: Sync error:', error);
       return { success: false, synced: totalSynced, error };
     } finally {
-      isSyncing = false;
-      syncLock = false;
-      syncPromise = null; // Clear the sync promise when done
+      state.isSyncing = false;
+      state.syncLock = false;
+      state.syncPromise = null; // Clear the sync promise when done
     }
   })();
 
-  return syncPromise;
+  return state.syncPromise;
 };
 
 export const setupSyncOnReconnect = (onSyncComplete) => {
+  const state = getSyncState();
   // Remove existing listener if present to prevent duplicate listeners
-  if (netInfoListener) {
-    netInfoListener();
+  if (state.netInfoListener) {
+    state.netInfoListener();
   }
   
-  netInfoListener = NetInfo.addEventListener((state) => {
-    if (state.isConnected && state.isInternetReachable !== false) {
+  state.netInfoListener = NetInfo.addEventListener((netState) => {
+    if (netState.isConnected && netState.isInternetReachable !== false) {
       console.log('[SyncService] Network restored, triggering sync...');
       syncPendingLocations().then((result) => {
         onSyncComplete?.(result);
@@ -373,17 +535,22 @@ export const setupSyncOnReconnect = (onSyncComplete) => {
 
 // Cleanup function to remove NetInfo listener
 export const cleanupSyncListeners = () => {
-  if (netInfoListener) {
-    netInfoListener();
-    netInfoListener = null;
+  const state = getSyncState();
+  if (state.netInfoListener) {
+    state.netInfoListener();
+    state.netInfoListener = null;
     console.log('[SyncService] NetInfo listener cleaned up');
   }
 };
 
 // Reset sync state - useful for recovering from stuck states
 export const resetSyncState = () => {
-  isSyncing = false;
-  syncPromise = null;
-  lastSyncTime = 0;
+  const state = getSyncState();
+  state.isSyncing = false;
+  state.syncPromise = null;
+  state.lastSyncTime = 0;
+  state.syncLock = false;
+  state.sessionCreationLocks?.clear?.();
   console.log('[SyncService] Sync state reset');
 };
+

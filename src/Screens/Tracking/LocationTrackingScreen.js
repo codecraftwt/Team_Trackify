@@ -28,7 +28,7 @@ import { launchCamera } from 'react-native-image-picker';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import { getCurrentPosition as getLocation } from '../../services/GeolocationService';
 import * as TrackingService from '../../services/TrackingService';
-import { getAllLocationsForSession } from '../../services/OfflineLocationStore';
+import { getAllLocationsForSession, getSessionByLocalId } from '../../services/OfflineLocationStore';
 import {
   enterTrackingPip,
   isNativeLocationEnabled,
@@ -188,6 +188,8 @@ const LocationTrackingScreen = () => {
   const [errorText, setErrorText] = useState(null);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertConfig, setAlertConfig] = useState({ title: '', message: '', type: 'error' });
+  const [bootComplete, setBootComplete] = useState(false);
+  const [punchInPhotoUri, setPunchInPhotoUri] = useState(null);
 
   const [addPhotoModalVisible, setAddPhotoModalVisible] = useState(false);
   const [tempPhotoFile, setTempPhotoFile] = useState(null);
@@ -479,6 +481,15 @@ const LocationTrackingScreen = () => {
       // });
       const photoPoints = points.filter(p => p.photoUri || p.remark || p.amount);
       setPhotoEntries(photoPoints);
+
+      // For offline/local sessions, the punch-in photo is stored on the session record,
+      // not on a location point. Use it for the Start marker image.
+      if (String(sessionId).startsWith('local_')) {
+        const sessionDetail = await getSessionByLocalId(sessionId);
+        setPunchInPhotoUri(getPhotoUriForDisplay(sessionDetail?.punchInPhotoUri ?? null));
+      } else {
+        setPunchInPhotoUri(null);
+      }
 
       if (points.length > 0) {
         const latest = points[points.length - 1];
@@ -915,6 +926,7 @@ const LocationTrackingScreen = () => {
       setDurationSeconds(0);
       setLocations([]);
       setPhotoEntries([]);
+      setPunchInPhotoUri(null);
       lastPointRef.current = null;
 
       await AsyncStorage.setItem(
@@ -1190,10 +1202,13 @@ const LocationTrackingScreen = () => {
             );
           }
         }
+        await restorePreviousSession();
       } catch {
         // no-op
+      } finally {
+        // Prevent auto start/stop race while restorePreviousSession is in-flight.
+        setBootComplete(true);
       }
-      await restorePreviousSession();
     };
     boot();
 
@@ -1307,6 +1322,10 @@ const LocationTrackingScreen = () => {
       return;
     }
 
+    if (!bootComplete) {
+      return;
+    }
+
     if (autoStartTracking && !trackingRef.current && !isTracking && !loading) {
       startTracking();
       navigation.setParams({
@@ -1324,6 +1343,7 @@ const LocationTrackingScreen = () => {
       });
     }
   }, [
+    bootComplete,
     autoStartTracking,
     autoStopTracking,
     isTracking,
@@ -1368,15 +1388,33 @@ const LocationTrackingScreen = () => {
       const markers = [];
 
       if (startCoordinate) {
-        markers.push(
-          <Marker
-            key={`${mapKeyPrefix}-start`}
-            coordinate={startCoordinate}
-            pinColor="green"
-            title="Start"
-            zIndex={1000}
-          />,
-        );
+        const startPhoto = startMarker?.photoUri ?? punchInPhotoUri;
+
+        if (startPhoto) {
+          markers.push(
+            <Marker
+              key={`${mapKeyPrefix}-start`}
+              coordinate={startCoordinate}
+              pinColor="green"
+              title="Start"
+              zIndex={1000}
+            >
+              {/* <View style={styles.startMarkerImageWrap}>
+                <Image source={{ uri: startPhoto }} style={styles.startMarkerImage} />
+              </View> */}
+            </Marker>,
+          );
+        } else {
+          markers.push(
+            <Marker
+              key={`${mapKeyPrefix}-start`}
+              coordinate={startCoordinate}
+              pinColor="green"
+              title="Start"
+              zIndex={1000}
+            />,
+          );
+        }
       }
 
       if (endCoordinate) {
@@ -1422,7 +1460,7 @@ const LocationTrackingScreen = () => {
 
       return markers;
     },
-    [currentLocation, endCoordinate, photoEntries, startCoordinate],
+    [currentLocation, endCoordinate, photoEntries, startCoordinate, startMarker, punchInPhotoUri],
   );
 
   return (
@@ -1636,6 +1674,18 @@ const styles = StyleSheet.create({
   mainBtnText: { color: '#fff', fontWeight: '700', fontSize: wp(4.3) },
   btnIcon: { marginRight: 8 },
   disabledBtn: { opacity: 0.7 },
+  startMarkerImageWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#10B981',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startMarkerImage: { width: '100%', height: '100%' },
   photoSection: {
     marginTop: hp(2),
     backgroundColor: '#fff',

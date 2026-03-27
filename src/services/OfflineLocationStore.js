@@ -103,7 +103,12 @@ export const getAllSessionsWithUnsyncedLocations = async () => {
   // Only fetch sessions that need syncing - those with serverSessionId but unsynced points,
   // OR those without serverSessionId that need to be created on server
   const sessions = await sessionsCollection()
-    .query(Q.or(Q.where('server_session_id', null), Q.where('server_session_id', '')))
+    .query(
+      Q.or(
+        Q.or(Q.where('server_session_id', null), Q.where('server_session_id', '')),
+        Q.where('status', 'ended'),
+      )
+    )
     .fetch();
   
   const result = [];
@@ -117,8 +122,10 @@ export const getAllSessionsWithUnsyncedLocations = async () => {
       .query(Q.where('session_local_id', session.localSessionId), Q.where('synced', false))
       .fetchCount();
     
-    // Only include sessions that have unsynced location points
-    if (unsyncedCount > 0) {
+    // Include:
+    // - sessions with unsynced points (need upload + possible create session)
+    // - sessions marked ended even if points are already synced (need server end call)
+    if (unsyncedCount > 0 || session.status === 'ended') {
       result.push({ session, unsyncedCount });
     }
   }

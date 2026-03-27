@@ -21,10 +21,13 @@ const FLUSH_EVERY_N_POINTS = 1;
 
 const CONFIG = {
   MIN_DISTANCE_METERS: 15,
-  // Be slightly more tolerant in background – GPS is naturally noisier
-  LOCATION_ACCURACY_THRESHOLD: 100,
+  // Stricter accuracy threshold to prevent inaccurate GPS readings from inflating distance
+  LOCATION_ACCURACY_THRESHOLD: 60,
   MAX_RETRIES: 3,
   RETRY_DELAY: 2000,
+  // Teleport detection: reject unrealistic jumps
+  MAX_TELEPORT_DISTANCE_METERS: 500,
+  MAX_REALISTIC_SPEED_MPS: 70,
 };
 
 const sleep = (time) => new Promise((resolve) => setTimeout(resolve, time));
@@ -40,6 +43,24 @@ const sleepInterruptible = async (totalMs, stepMs = 250) => {
     const remaining = ms - (Date.now() - started);
     await sleep(Math.min(step, remaining));
   }
+};
+
+const normalizeTimestamp = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    // If timestamp is in seconds (Unix epoch), convert to milliseconds
+    return value > 0 && value < 1e12 ? value * 1000 : value;
+  }
+  if (typeof value === 'string') {
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber)) {
+      return asNumber > 0 && asNumber < 1e12 ? asNumber * 1000 : asNumber;
+    }
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return Date.now();
 };
 
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -74,11 +95,13 @@ const getCurrentLocationWithRetry = async (retryCount = 0) => {
     }
     
     if (location.accuracy > CONFIG.LOCATION_ACCURACY_THRESHOLD) {
-      console.warn(`Background: Location accuracy too low: ${location.accuracy}m`);
+      console.warn(`Background: Location accuracy too low: ${location.accuracy}m (threshold: ${CONFIG.LOCATION_ACCURACY_THRESHOLD}m)`);
       if (retryCount < CONFIG.MAX_RETRIES) {
         await sleep(CONFIG.RETRY_DELAY);
         return getCurrentLocationWithRetry(retryCount + 1);
       }
+      // If max retries reached and accuracy still too low, reject this location
+      throw new Error(`Location accuracy too low: ${location.accuracy}m`);
     }
     
     return location;
@@ -139,7 +162,7 @@ const sendLocationPointToServer = async (sessionId, location) => {
     const formData = new FormData();
     formData.append('latitude', String(latitude));
     formData.append('longitude', String(longitude));
-    formData.append('timestamp', String(location.time || now));
+    formData.append('timestamp', String(normalizeTimestamp(location.time || now)));
     formData.append('address', address);
     formData.append('road', road);
     formData.append('area', area);
@@ -162,7 +185,7 @@ const sendLocationPointToServer = async (sessionId, location) => {
     const locationData = {
       latitude,
       longitude,
-      timestamp: location.time || now,
+      timestamp: normalizeTimestamp(location.time || now),
       address,
       road,
       area,
@@ -237,7 +260,18 @@ const backgroundLocationTask = async (taskData) => {
               location.longitude
             );
             
-            if (distance < CONFIG.MIN_DISTANCE_METERS) {
+            // Check for teleport (unrealistic jump)
+            const currentTime = normalizeTimestamp(location.time || Date.now());
+            const lastTime = lastSuccessfulLocation.time || currentTime;
+            const elapsedMs = Math.max(1, currentTime - lastTime);
+            const speedMps = distance / (elapsedMs / 1000);
+            const looksLikeTeleport =
+              distance > CONFIG.MAX_TELEPORT_DISTANCE_METERS && speedMps > CONFIG.MAX_REALISTIC_SPEED_MPS;
+            
+            if (looksLikeTeleport) {
+              console.warn(`Background: Teleport detected (${distance.toFixed(0)}m in ${(elapsedMs/1000).toFixed(1)}s = ${speedMps.toFixed(1)} m/s), skipping`);
+              shouldSend = false;
+            } else if (distance < CONFIG.MIN_DISTANCE_METERS) {
               // console.log(`Background: Location skipped (moved only ${distance.toFixed(1)}m)`);
               shouldSend = false;
             }
@@ -251,7 +285,7 @@ const backgroundLocationTask = async (taskData) => {
                 latitude: location.latitude,
                 longitude: location.longitude,
                 accuracy: location.accuracy,
-                time: location.time || Date.now(),
+                time: normalizeTimestamp(location.time || Date.now()),
               };
               locationCount++;
               consecutiveFailures = 0;
