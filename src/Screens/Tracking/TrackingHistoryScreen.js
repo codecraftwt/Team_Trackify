@@ -82,6 +82,9 @@ const SessionItem = ({ item, onPress }) => {
   const end = isActive ? 'Active' : formatTime(item.endTime);
   const distance = item.totalDistance ?? 0;
 
+   // Use totalUploadedPhotos as delivery stations count
+  const deliveryStations = item.totalUploadedPhotos ?? 0;
+
   return (
     <View
       style={[
@@ -105,10 +108,10 @@ const SessionItem = ({ item, onPress }) => {
       {/* Delivery stations */}
       <View style={styles.infoRow}>
         <View style={styles.roundIconBlue}>
-          <Icon name="bicycle" size={16} color="#0f5fc5" />
+          <Icon name="building" size={16} color="#0f5fc5" />
         </View>
         <Text style={styles.infoText}>
-          Delivery Stations: {item.deliveryStations ?? 0}
+          Delivery Stations: {deliveryStations}
         </Text>
       </View>
 

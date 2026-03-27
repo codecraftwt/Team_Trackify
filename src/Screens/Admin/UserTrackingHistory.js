@@ -1281,15 +1281,15 @@ const UserTrackingHistory = ({ navigation, route }) => {
   };
 
   // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
+  // const formatDate = (dateString) => {
+  //   if (!dateString) return 'N/A';
+  //   const date = new Date(dateString);
+  //   return date.toLocaleDateString('en-GB', {
+  //     day: '2-digit',
+  //     month: 'short',
+  //     year: 'numeric',
+  //   });
+  // };
 
   // Format time
   const formatTime = (iso) => {
@@ -1315,9 +1315,9 @@ const UserTrackingHistory = ({ navigation, route }) => {
   };
 
   // Get session count for current selected date
-  const getSessionCountForDate = () => {
-    return (trackingData?.sessions || []).length;
-  };
+  // const getSessionCountForDate = () => {
+  //   return (trackingData?.sessions || []).length;
+  // };
 
   // Handle day press in calendar
   const onDayPress = (day) => {
@@ -1367,6 +1367,9 @@ const UserTrackingHistory = ({ navigation, route }) => {
     const end = isActive ? 'Active' : formatTime(item.endTime);
     const distance = item.totalDistance ?? 0;
 
+    //delivery stations count
+    const deliveryStations = item.totalUploadedPhotos ?? 0;
+
     return (
       <TouchableOpacity
         style={[
@@ -1405,7 +1408,7 @@ const UserTrackingHistory = ({ navigation, route }) => {
             <Icon2 name="bicycle" size={16} color="#0f5fc5" />
           </View>
           <Text style={styles.infoText}>
-            Delivery Stations: {item.deliveryStations ?? 0}
+            Delivery Stations: {deliveryStations ?? 0}
           </Text>
         </View>
 
