@@ -77,7 +77,7 @@ const SessionItem = ({ item, onPress }) => {
   const end = isActive ? 'Active' : formatTime(item.endTime);
   const distance = item.totalDistance ?? 0;
 
-   // Use totalUploadedPhotos as delivery stations count
+  // Use totalUploadedPhotos as delivery stations count
   const deliveryStations = item.totalUploadedPhotos ?? 0;
 
   return (
@@ -153,6 +153,23 @@ const TrackingHistoryScreen = ({ route }) => {
 
   const [page, setPage] = useState(1);
   const [nextCursor, setNextCursor] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Reset pagination state
+      setNextCursor(null);
+      setPage(1);
+
+      // Always fetch fresh data when screen comes into focus
+      loadRef.current(true);
+
+      // Clean up function (optional)
+      return () => {
+        // You can add any cleanup logic here if needed
+        // For example, cancel ongoing requests
+      };
+    }, []) // Empty dependency array means this runs every time screen focuses
+  );
 
   // Fetch tracking dates for calendar using TrackingService
   const fetchTrackingDates = async () => {
@@ -383,7 +400,7 @@ const TrackingHistoryScreen = ({ route }) => {
           <Text style={styles.summaryDistance}>
             {formatDistanceKm(totalDistance)}
           </Text>
-          <Text style={styles.summaryLabel}>Total Traveled Distance</Text>
+          <Text style={styles.summaryLabel}>Total Trzaveled Distance</Text>
         </View>
 
         <FlatList
@@ -512,7 +529,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   summaryDistance: {
-    fontSize: wp(10),
+    fontSize: wp(8),
     fontWeight: '700',
     color: '#fff',
     marginTop: hp(1),

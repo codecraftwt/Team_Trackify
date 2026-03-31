@@ -205,6 +205,18 @@ const AdminHistory = ({ navigation, route }) => {
     status: 1,
   });
 
+  // Edit user field errors state
+  const [editFieldErrors, setEditFieldErrors] = useState({
+    name: '',
+    email: '',
+    password: '',
+    mobile_no: '',
+    address: '',
+    role_id: '',
+    isActive: '',
+    status: '',
+  });
+
 
   // Function to pick image from gallery or camera
   const pickImage = (type = 'gallery') => {
@@ -685,13 +697,25 @@ const AdminHistory = ({ navigation, route }) => {
 
   // Handle edit user submit
   const handleEditUserSubmit = async () => {
+    // Clear previous errors
+    setEditFieldErrors({
+      name: '',
+      email: '',
+      password: '',
+      mobile_no: '',
+      address: '',
+      role_id: '',
+      isActive: '',
+      status: '',
+    });
+
     // Validate required fields
     if (!editUserData.name.trim()) {
-      Alert.alert('Validation Error', 'Please enter user name');
+      setEditFieldErrors(prev => ({ ...prev, name: 'Please enter user name' }));
       return;
     }
     if (!editUserData.email.trim()) {
-      Alert.alert('Validation Error', 'Please enter email');
+      setEditFieldErrors(prev => ({ ...prev, email: 'Please enter email' }));
       return;
     }
 
@@ -719,7 +743,17 @@ const AdminHistory = ({ navigation, route }) => {
         setEditUserModalVisible(false);
         fetchUsers(true); // Refresh the list
       } else {
-        Alert.alert('Error', response.message || 'Failed to update user');
+        // Handle validation errors
+        if (response.errors && Array.isArray(response.errors) && response.errors.length > 0) {
+          // Map backend errors to specific fields
+          const mappedErrors = mapValidationErrors(response.errors, true);
+          setEditFieldErrors(mappedErrors);
+
+          // Scroll to top to show errors
+          scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        } else {
+          Alert.alert('Error', response.message || 'Failed to update user');
+        }
       }
     } catch (err) {
       Alert.alert('Error', 'Something went wrong while updating user');
@@ -1222,62 +1256,107 @@ const AdminHistory = ({ navigation, route }) => {
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Name *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, editFieldErrors.name ? styles.inputError : null]}
                   placeholder="Enter name"
                   placeholderTextColor="#999"
                   value={editUserData.name}
-                  onChangeText={(text) => setEditUserData({ ...editUserData, name: text })}
+                  onChangeText={(text) => {
+                    setEditUserData({ ...editUserData, name: text });
+                    // Clear error when user starts typing
+                    if (editFieldErrors.name) {
+                      setEditFieldErrors(prev => ({ ...prev, name: '' }));
+                    }
+                  }}
                 />
+                {editFieldErrors.name ? (
+                  <Text style={styles.errorText}>{editFieldErrors.name}</Text>
+                ) : null}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Email *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, editFieldErrors.email ? styles.inputError : null]}
                   placeholder="Enter email"
                   placeholderTextColor="#999"
                   value={editUserData.email}
-                  onChangeText={(text) => setEditUserData({ ...editUserData, email: text })}
+                  onChangeText={(text) => {
+                    setEditUserData({ ...editUserData, email: text });
+                    if (editFieldErrors.email) {
+                      setEditFieldErrors(prev => ({ ...prev, email: '' }));
+                    }
+                  }}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
+                {editFieldErrors.email ? (
+                  <Text style={styles.errorText}>{editFieldErrors.email}</Text>
+                ) : null}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>New Password (leave blank to keep current)</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, editFieldErrors.password ? styles.inputError : null]}
                   placeholder="Enter new password"
                   placeholderTextColor="#999"
                   value={editUserData.password}
-                  onChangeText={(text) => setEditUserData({ ...editUserData, password: text })}
+                  onChangeText={(text) => {
+                    setEditUserData({ ...editUserData, password: text });
+                    if (editFieldErrors.password) {
+                      setEditFieldErrors(prev => ({ ...prev, password: '' }));
+                    }
+                  }}
                   secureTextEntry
                 />
+                {editFieldErrors.password ? (
+                  <Text style={styles.errorText}>{editFieldErrors.password}</Text>
+                ) : null}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Mobile Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, editFieldErrors.mobile_no ? styles.inputError : null]}
                   placeholder="Enter mobile number"
                   placeholderTextColor="#999"
                   value={editUserData.mobile_no}
-                  onChangeText={(text) => setEditUserData({ ...editUserData, mobile_no: text })}
+                  onChangeText={(text) => {
+                    setEditUserData({ ...editUserData, mobile_no: text });
+                    if (editFieldErrors.mobile_no) {
+                      setEditFieldErrors(prev => ({ ...prev, mobile_no: '' }));
+                    }
+                  }}
                   keyboardType="phone-pad"
                 />
+                {editFieldErrors.mobile_no ? (
+                  <Text style={styles.errorText}>{editFieldErrors.mobile_no}</Text>
+                ) : null}
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Address</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[
+                    styles.input,
+                    styles.textArea,
+                    editFieldErrors.address ? styles.inputError : null
+                  ]}
                   placeholder="Enter address"
                   placeholderTextColor="#999"
                   value={editUserData.address}
-                  onChangeText={(text) => setEditUserData({ ...editUserData, address: text })}
+                  onChangeText={(text) => {
+                    setEditUserData({ ...editUserData, address: text });
+                    if (editFieldErrors.address) {
+                      setEditFieldErrors(prev => ({ ...prev, address: '' }));
+                    }
+                  }}
                   multiline
                   numberOfLines={3}
                 />
+                {editFieldErrors.address ? (
+                  <Text style={styles.errorText}>{editFieldErrors.address}</Text>
+                ) : null}
               </View>
 
               {/* <View style={styles.inputGroup}>
@@ -1356,7 +1435,12 @@ const AdminHistory = ({ navigation, route }) => {
                       styles.roleButton,
                       editUserData.isActive === true && styles.roleButtonActive
                     ]}
-                    onPress={() => setEditUserData({ ...editUserData, isActive: true })}
+                    onPress={() => {
+                      setEditUserData({ ...editUserData, isActive: true });
+                      if (editFieldErrors.isActive) {
+                        setEditFieldErrors(prev => ({ ...prev, isActive: '' }));
+                      }
+                    }}
                   >
                     <Text style={[
                       styles.roleButtonText,
@@ -1370,7 +1454,12 @@ const AdminHistory = ({ navigation, route }) => {
                       styles.roleButton,
                       editUserData.isActive === false && styles.roleButtonActive
                     ]}
-                    onPress={() => setEditUserData({ ...editUserData, isActive: false })}
+                    onPress={() => {
+                      setEditUserData({ ...editUserData, isActive: false });
+                      if (editFieldErrors.isActive) {
+                        setEditFieldErrors(prev => ({ ...prev, isActive: '' }));
+                      }
+                    }}
                   >
                     <Text style={[
                       styles.roleButtonText,
@@ -1380,6 +1469,9 @@ const AdminHistory = ({ navigation, route }) => {
                     </Text>
                   </TouchableOpacity>
                 </View>
+                {editFieldErrors.isActive ? (
+                  <Text style={styles.errorText}>{editFieldErrors.isActive}</Text>
+                ) : null}
               </View>
             </ScrollView>
 

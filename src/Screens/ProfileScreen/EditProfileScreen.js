@@ -36,6 +36,14 @@ const EditProfileScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [avatarUri, setAvatarUri] = useState(null)
   const [avatarUrl, setAvatarUrl] = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({
+    name: "",
+    email: "",
+    mobile_no: "",
+    address: "",
+    password: "",
+    confirmPassword: "",
+  })
 
   const profile = userProfile || route.params?.userProfile || {}
 
@@ -76,24 +84,74 @@ const EditProfileScreen = () => {
     ])
   }
 
+  // Function to map backend validation errors to specific fields
+  const mapValidationErrors = (errorsArray) => {
+    const mappedErrors = {
+      name: "",
+      email: "",
+      mobile_no: "",
+      address: "",
+      password: "",
+      confirmPassword: "",
+    }
+
+    if (!errorsArray || !Array.isArray(errorsArray)) {
+      return mappedErrors
+    }
+
+    errorsArray.forEach(error => {
+      const lowerError = error.toLowerCase()
+      // Map error messages to fields based on keywords
+      if (lowerError.includes('name')) {
+        mappedErrors.name = error
+      }
+      else if (lowerError.includes('email')) {
+        mappedErrors.email = error
+      }
+      else if (lowerError.includes('password')) {
+        mappedErrors.password = error
+      }
+      else if (lowerError.includes('mobile')) {
+        mappedErrors.mobile_no = error
+      }
+      else if (lowerError.includes('address')) {
+        mappedErrors.address = error
+      }
+    })
+
+    return mappedErrors
+  }
+
   const validate = () => {
+    // Clear previous errors
+    setFieldErrors({
+      name: "",
+      email: "",
+      mobile_no: "",
+      address: "",
+      password: "",
+      confirmPassword: "",
+    })
+
+    let isValid = true
+
     if (!formData.name?.trim()) {
-      Alert.alert("Validation", "Full Name is required")
-      return false
+      setFieldErrors(prev => ({ ...prev, name: "Full Name is required" }))
+      isValid = false
     }
     if (!formData.email?.trim()) {
-      Alert.alert("Validation", "Email Address is required")
-      return false
+      setFieldErrors(prev => ({ ...prev, email: "Email Address is required" }))
+      isValid = false
     }
     if (!formData.mobile_no?.trim()) {
-      Alert.alert("Validation", "Mobile Number is required")
-      return false
+      setFieldErrors(prev => ({ ...prev, mobile_no: "Mobile Number is required" }))
+      isValid = false
     }
     if (password && password !== confirmPassword) {
-      Alert.alert("Validation", "Passwords do not match")
-      return false
+      setFieldErrors(prev => ({ ...prev, confirmPassword: "Passwords do not match" }))
+      isValid = false
     }
-    return true
+    return isValid
   }
 
   const handleUpdate = async () => {
@@ -116,6 +174,19 @@ const EditProfileScreen = () => {
       }
 
       const result = await updateUser(effectiveUserId, payload, avatarUri || undefined)
+
+      // Check if the update was successful
+      if (!result.success) {
+        // Handle validation errors
+        if (result.errors && Array.isArray(result.errors) && result.errors.length > 0) {
+          // Map backend errors to specific fields
+          const mappedErrors = mapValidationErrors(result.errors)
+          setFieldErrors(mappedErrors)
+        } else {
+          Alert.alert("Error", result.message || "Failed to update profile")
+        }
+        return
+      }
 
       const updatedUser = result.user || result.data || result
       const merged = { ...profile, ...updatedUser, ...payload }
@@ -180,54 +251,86 @@ const EditProfileScreen = () => {
           <View style={styles.inputWrapper}>
             <Ionicons name="person-outline" size={20} color="#438AFF" style={styles.inputIcon} />
             <TextInput
-              style={styles.input}
+              style={[styles.input, fieldErrors.name ? styles.inputError : null]}
               placeholder="Full Name"
               placeholderTextColor="#9CA3AF"
               value={formData.name}
-              onChangeText={(t) => setFormData((p) => ({ ...p, name: t }))}
+              onChangeText={(t) => {
+                setFormData((p) => ({ ...p, name: t }))
+                if (fieldErrors.name) {
+                  setFieldErrors(prev => ({ ...prev, name: '' }))
+                }
+              }}
             />
           </View>
+          {fieldErrors.name ? (
+            <Text style={styles.errorText}>{fieldErrors.name}</Text>
+          ) : null}
 
           <Text style={styles.label}>Email Address</Text>
           <View style={[styles.inputWrapper, profile.role_id === 0 && styles.disabledInputWrapper]}>
             <Ionicons name="mail-outline" size={20} color={profile.role_id === 0 ? "#9CA3AF" : "#438AFF"} style={styles.inputIcon} />
             <TextInput
-              style={[styles.input, profile.role_id === 0 && styles.disabledInput]}
+              style={[styles.input, profile.role_id === 0 && styles.disabledInput, fieldErrors.email ? styles.inputError : null]}
               placeholder="Email Address"
               placeholderTextColor="#9CA3AF"
               keyboardType="email-address"
               autoCapitalize="none"
               value={formData.email}
-              onChangeText={(t) => setFormData((p) => ({ ...p, email: t }))}
+              onChangeText={(t) => {
+                setFormData((p) => ({ ...p, email: t }))
+                if (fieldErrors.email) {
+                  setFieldErrors(prev => ({ ...prev, email: '' }))
+                }
+              }}
               editable={profile.role_id !== 0}
               selectTextOnFocus={profile.role_id !== 0}
             />
           </View>
+          {fieldErrors.email ? (
+            <Text style={styles.errorText}>{fieldErrors.email}</Text>
+          ) : null}
 
           <Text style={styles.label}>Mobile Number</Text>
           <View style={styles.inputWrapper}>
             <Ionicons name="call-outline" size={20} color="#438AFF" style={styles.inputIcon} />
             <TextInput
-              style={styles.input}
+              style={[styles.input, fieldErrors.mobile_no ? styles.inputError : null]}
               placeholder="Mobile Number"
               placeholderTextColor="#9CA3AF"
               keyboardType="phone-pad"
               value={formData.mobile_no}
-              onChangeText={(t) => setFormData((p) => ({ ...p, mobile_no: t }))}
+              onChangeText={(t) => {
+                setFormData((p) => ({ ...p, mobile_no: t }))
+                if (fieldErrors.mobile_no) {
+                  setFieldErrors(prev => ({ ...prev, mobile_no: '' }))
+                }
+              }}
             />
           </View>
+          {fieldErrors.mobile_no ? (
+            <Text style={styles.errorText}>{fieldErrors.mobile_no}</Text>
+          ) : null}
 
           <Text style={styles.label}>Address</Text>
           <View style={styles.inputWrapper}>
             <Ionicons name="location-outline" size={20} color="#438AFF" style={styles.inputIcon} />
             <TextInput
-              style={styles.input}
+              style={[styles.input, fieldErrors.address ? styles.inputError : null]}
               placeholder="Address"
               placeholderTextColor="#9CA3AF"
               value={formData.address}
-              onChangeText={(t) => setFormData((p) => ({ ...p, address: t }))}
+              onChangeText={(t) => {
+                setFormData((p) => ({ ...p, address: t }))
+                if (fieldErrors.address) {
+                  setFieldErrors(prev => ({ ...prev, address: '' }))
+                }
+              }}
             />
           </View>
+          {fieldErrors.address ? (
+            <Text style={styles.errorText}>{fieldErrors.address}</Text>
+          ) : null}
 
           {/* Security */}
           <View style={[styles.section, { marginTop: hp(2) }]}>
@@ -239,12 +342,17 @@ const EditProfileScreen = () => {
           <View style={styles.inputWrapper}>
             <Ionicons name="lock-closed-outline" size={20} color="#438AFF" style={styles.inputIcon} />
             <TextInput
-              style={styles.input}
+              style={[styles.input, fieldErrors.password ? styles.inputError : null]}
               placeholder="Enter password"
               placeholderTextColor="#9CA3AF"
               secureTextEntry={!showPassword}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(t) => {
+                setPassword(t)
+                if (fieldErrors.password) {
+                  setFieldErrors(prev => ({ ...prev, password: '' }))
+                }
+              }}
             />
             <TouchableOpacity
               style={styles.eyeButton}
@@ -257,17 +365,25 @@ const EditProfileScreen = () => {
               />
             </TouchableOpacity>
           </View>
+          {fieldErrors.password ? (
+            <Text style={styles.errorText}>{fieldErrors.password}</Text>
+          ) : null}
 
           <Text style={styles.label}>Confirm Password</Text>
           <View style={styles.inputWrapper}>
             <Ionicons name="lock-closed-outline" size={20} color="#438AFF" style={styles.inputIcon} />
             <TextInput
-              style={styles.input}
+              style={[styles.input, fieldErrors.confirmPassword ? styles.inputError : null]}
               placeholder="Confirm password"
               placeholderTextColor="#9CA3AF"
               secureTextEntry={!showConfirmPassword}
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(t) => {
+                setConfirmPassword(t)
+                if (fieldErrors.confirmPassword) {
+                  setFieldErrors(prev => ({ ...prev, confirmPassword: '' }))
+                }
+              }}
             />
             <TouchableOpacity
               style={styles.eyeButton}
@@ -280,6 +396,9 @@ const EditProfileScreen = () => {
               />
             </TouchableOpacity>
           </View>
+          {fieldErrors.confirmPassword ? (
+            <Text style={styles.errorText}>{fieldErrors.confirmPassword}</Text>
+          ) : null}
 
           {/* Update Button */}
           <TouchableOpacity
@@ -451,6 +570,15 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: wp(4.2),
     fontWeight: "700",
+  },
+  inputError: {
+    borderColor: "#F44336",
+  },
+  errorText: {
+    color: "#F44336",
+    fontSize: wp(3),
+    marginTop: hp(0.5),
+    marginBottom: hp(1),
   },
 })
 

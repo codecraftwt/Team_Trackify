@@ -674,12 +674,20 @@ export const updateUser = async (userId, userData) => {
         message: result.message || 'User updated successfully'
       };
     } else {
-      return {
+      // Handle validation errors from backend
+      const errorResponse = {
         success: false,
         data: null,
         message: result.message || 'Failed to update user',
         status: response.status
       };
+      
+      // Include validation errors if present
+      if (result.errors && Array.isArray(result.errors)) {
+        errorResponse.errors = result.errors;
+      }
+      
+      return errorResponse;
     }
 
   } catch (error) {
