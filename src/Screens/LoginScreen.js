@@ -17,9 +17,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import BASE_URL from '../config/server';
 import { useAuth } from '../config/auth-context';
 import { CommonActions } from '@react-navigation/native';
-import FancyAlert from './FancyAlert';
 import NotificationManager from '../Notifications/NotificationManager';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import Toast from 'react-native-toast-message';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -28,11 +28,6 @@ const LoginScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const { setAuthData } = useAuth();
-
-  const [showAlert, setShowAlert] = useState(false);
-  const [alertMessage, setAlertMessage] = useState("");
-  const [alertType, setAlertType] = useState("danger");
-  const [alertTitle, setAlertTitle] = useState("Alert");
 
   useEffect(() => {
     // Keyboard event listeners
@@ -55,46 +50,39 @@ const LoginScreen = ({ navigation }) => {
     };
   }, []);
 
-  useEffect(() => {
-    let timer;
-    if (showAlert) {
-      timer = setTimeout(() => {
-        setShowAlert(false);
-      }, 60000);
-    }
-    return () => clearTimeout(timer);
-  }, [showAlert]);
-
   const toggleShowPassword = () => {
     setShowPassword(!showPassword);
+  };
+
+  const showToast = (message, type = 'error') => {
+    Toast.show({
+      type: type,
+      text1: type === 'error' ? 'Error' : 'Success',
+      text2: message,
+      visibilityTime: 4000,
+      autoHide: true,
+      topOffset: 50,
+      bottomOffset: 40,
+    });
   };
 
   const handleLogin = async () => {
 
     // Validate email and password
     if (!email.trim()) {
-      setAlertTitle("Validation Error");
-      setAlertMessage("Please enter your email address.");
-      setAlertType("danger");
-      setShowAlert(true);
+      showToast("Please enter your email address.");
       return;
     }
 
     if (!password.trim()) {
-      setAlertTitle("Validation Error");
-      setAlertMessage("Please enter your password.");
-      setAlertType("danger");
-      setShowAlert(true);
+      showToast("Please enter your password.");
       return;
     }
 
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setAlertTitle("Validation Error");
-      setAlertMessage("Please enter a valid email address.");
-      setAlertType("danger");
-      setShowAlert(true);
+      showToast("Please enter a valid email address.");
       return;
     }
 
@@ -115,10 +103,7 @@ const LoginScreen = ({ navigation }) => {
       const text = await response.text();
 
       if (!text) {
-        setAlertTitle("Login Failed");
-        setAlertMessage("Empty response from server.");
-        setAlertType("danger");
-        setShowAlert(true);
+        showToast("Empty response from server.");
         setIsLoading(false);
         return;
       }
@@ -128,15 +113,10 @@ const LoginScreen = ({ navigation }) => {
         data = JSON.parse(text);
       } catch (err) {
         console.error("Login API Error: Invalid JSON", err, text);
-        setAlertTitle("Login Failed");
-        setAlertMessage("Invalid response format from server.");
-        setAlertType("danger");
-        setShowAlert(true);
+        showToast("Invalid response format from server.");
         setIsLoading(false);
         return;
       }
-
-      // console.log("Login API Response:", data);
 
       // Check if login was successful (status: 1)
       if (response.ok && data.status === 1 && data.token) {
@@ -144,10 +124,7 @@ const LoginScreen = ({ navigation }) => {
         const user = data.user;
 
         // Store user data in auth context
-        // Check role_id from API response: 0 = user, 1 = admin
         const userRole = user.role_id === 1 ? 'Admin' : 'user';
-
-        // Get subscription status from API response
         const subscriptionStatusData = data.subscriptionStatus || null;
 
         await setAuthData(
@@ -159,14 +136,6 @@ const LoginScreen = ({ navigation }) => {
           subscriptionStatusData
         );
 
-        // console.log('User Logged In:', {
-        //   name: user.name,
-        //   id: user._id,
-        //   role: userRole,
-        //   roleId: user.role_id,
-        //   subscriptionStatus: subscriptionStatusData,
-        // });
-
         // Store additional user info in AsyncStorage if needed
         if (user.name) {
           await AsyncStorage.setItem("userName", user.name);
@@ -177,7 +146,9 @@ const LoginScreen = ({ navigation }) => {
 
         // Get and Log the FCM Token
         const fcmToken = await NotificationManager.getFCMToken();
-        // console.log("🔥 Successfully Logged In. Firebase ID (FCM Token):", fcmToken);
+        
+        // Show success toast
+        showToast("Login successful! Welcome back.", "success");
 
         // Reset navigation stack to the authenticated flow
         navigation.dispatch(
@@ -195,17 +166,11 @@ const LoginScreen = ({ navigation }) => {
         );
       } else {
         // Handle login failure
-        setAlertTitle("Login Failed");
-        setAlertMessage(data.message || "Invalid email or password.");
-        setAlertType("danger");
-        setShowAlert(true);
+        showToast(data.message || "Invalid email or password.");
       }
     } catch (error) {
       console.error('Login API Error:', error);
-      setAlertTitle("Error");
-      setAlertMessage("Something went wrong. Please check your connection and try again.");
-      setAlertType("danger");
-      setShowAlert(true);
+      showToast("Something went wrong. Please check your connection and try again.");
     } finally {
       setIsLoading(false);
     }
@@ -343,13 +308,7 @@ const LoginScreen = ({ navigation }) => {
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
-      <FancyAlert
-        visible={showAlert}
-        title={alertTitle}
-        message={alertMessage}
-        type={alertType}
-        onClose={() => setShowAlert(false)}
-      />
+      <Toast />
     </View>
   );
 };

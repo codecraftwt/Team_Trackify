@@ -5,12 +5,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AppNavigator from './src/Navigation/AppNavigator';
 import { AuthProvider } from './src/config/auth-context';
 import { Buffer } from 'buffer';
-import Toast from 'react-native-toast-message';
+// import Toast from 'react-native-toast-message';
 import { requestLocationPermission } from './src/Screens/CameraPermissionService';
 import { registerTrackingForegroundService } from './src/services/BackgroundTrackingService';
 import NotificationManager from './src/Notifications/NotificationManager';
 import { setupSyncOnReconnect, syncPendingLocations, cleanupSyncListeners } from './src/services/SyncService';
-
+import Toast from 'react-native-toast-message';
 
 global.Buffer = Buffer;
 
@@ -48,7 +48,7 @@ const App = () => {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <AppNavigator />
-        {/* <Toast /> */}
+        <Toast />
       </AuthProvider>
     </GestureHandlerRootView>
   );

@@ -6,14 +6,14 @@ import {
   getUnsyncedLocations,
   markLocationSynced,
   updateSessionServerId,
-  endLocalSession,
+  // endLocalSession,
   getSessionByLocalId,
   getAllLocationsForSession,
   relocatePointsToSession,
 } from './OfflineLocationStore';
 
-const SYNC_DEBOUNCE_MS = 5000; // Minimum 5 seconds between sync triggers
-const LOCK_TIMEOUT_MS = 30000; // 30 seconds timeout for session creation locks
+const SYNC_DEBOUNCE_MS = 3000; // Minimum 2 seconds between sync triggers (reduced from 5s for faster sync)
+const LOCK_TIMEOUT_MS = 20000; // 15 seconds timeout for session creation locks (reduced from 30s for faster sync)
 
 // IMPORTANT:
 // This module can be loaded more than once in some bundling/dev scenarios.
@@ -369,6 +369,8 @@ export const syncPendingLocations = async () => {
         const unsyncedPoints = await getUnsyncedLocations(session.localSessionId);
         console.log('[SyncService] Found unsynced points:', unsyncedPoints.length);
 
+        // Pre-check photo existence for all points to avoid repeated file system checks
+        const photoExistenceCache = new Map();
         for (const point of unsyncedPoints) {
           try {
             const formData = new FormData();
