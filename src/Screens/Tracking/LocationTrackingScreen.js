@@ -17,7 +17,8 @@ import {
   TouchableOpacity,
   View,
   BackHandler,
-  useColorScheme
+  useColorScheme,
+  // NativeModules
 } from 'react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -47,6 +48,50 @@ import {
   isBackgroundJobRunning,
 } from '../../services/BackgroundLocationJob';
 import { useAuth } from '../../config/auth-context';
+
+// const { BatteryOptimization } = NativeModules;
+
+// const checkBatteryOptimization = async () => {
+//   if (Platform.OS !== 'android') return true;
+  
+//   try {
+//     const enabled = await BatteryOptimization.isBatteryOptimizationEnabled();
+    
+//     if (enabled) {
+//       return new Promise((resolve) => {
+//         Alert.alert(
+//           'Battery Optimization',
+//           'Battery optimization is enabled for this app. This may prevent location tracking from working properly in the background. Would you like to disable it?',
+//           [
+//             {
+//               text: 'Cancel',
+//               style: 'cancel',
+//               onPress: () => resolve(true), // User cancelled, allow to proceed
+//             },
+//             {
+//               text: 'Disable',
+//               onPress: () => {
+//                 BatteryOptimization.requestDisableOptimization();
+//                 // Wait for user to return from settings
+//                 const subscription = AppState.addEventListener('change', (nextAppState) => {
+//                   if (nextAppState === 'active') {
+//                     subscription.remove();
+//                     resolve(true); // User returned from settings, proceed
+//                   }
+//                 });
+//               },
+//             },
+//           ],
+//           { cancelable: true },
+//         );
+//       });
+//     }
+//     return true; // Battery optimization not enabled, proceed
+//   } catch (error) {
+//     console.warn('BatteryOptimization: check failed', error);
+//     return true; // Allow to proceed on error
+//   }
+// };
 
 const { width } = Dimensions.get('window');
 
@@ -855,6 +900,9 @@ const LocationTrackingScreen = () => {
         setLoading(false);
         return;
       }
+
+      // STEP 2.5: Check battery optimization before starting tracking
+      // await checkBatteryOptimization();
 
       // STEP 3: Get initial location first (to ensure GPS is actually working)
       let initialLocation;
