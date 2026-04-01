@@ -243,13 +243,18 @@ export default function ManagePlans() {
     let disableReason = '';
 
     if (!loadingSubscription) {
-      if (subscriptionStatus.hasActivePlan && !isAddOn) {
+      // Check if user has active base plan OR active custom plan
+      const hasActiveBaseOrCustomPlan = subscriptionStatus.hasActivePlan || (customPlan !== null);
+      const hasNoBaseOrCustomPlan = subscriptionStatus.hasNoPlan && customPlan === null;
+      const hasExpiredBasePlanAndNoCustomPlan = subscriptionStatus.hasExpiredPlan && customPlan === null;
+
+      if (hasActiveBaseOrCustomPlan && !isAddOn) {
         isDisabled = true;
         disableReason = 'Active Plan';
-      } else if (subscriptionStatus.hasNoPlan && isAddOn) {
+      } else if (hasNoBaseOrCustomPlan && isAddOn) {
         isDisabled = true;
         disableReason = 'Needs Base Plan';
-      } else if (subscriptionStatus.hasExpiredPlan && isAddOn) {
+      } else if (hasExpiredBasePlanAndNoCustomPlan && isAddOn) {
         isDisabled = true;
         disableReason = 'Renew First';
       }
@@ -264,9 +269,9 @@ export default function ManagePlans() {
             Alert.alert(
               'Plan Unavailable',
               disableReason === 'Active Plan'
-                ? 'You already have an active base plan. You can purchase add-ons.'
+                ? 'You already have an active base or custom plan. You can purchase add-ons.'
                 : disableReason === 'Needs Base Plan'
-                  ? 'You need to purchase a base plan first before buying add-ons.'
+                  ? 'You need to purchase a base or custom plan first before buying add-ons.'
                   : 'Please renew your base plan first before purchasing add-ons.'
             );
           } else {
@@ -467,55 +472,75 @@ export default function ManagePlans() {
               </View>
               
               <TouchableOpacity
-                style={[styles.card, styles.customPlanCard]}
-                activeOpacity={0.7}
+                style={[styles.card, styles.customPlanCard, subscriptionStatus.hasActivePlan && styles.cardDisabled]}
+                activeOpacity={subscriptionStatus.hasActivePlan ? 1 : 0.7}
                 onPress={() => {
-                  navigation.navigate('PlanDetails', {
-                    planId: customPlan._id,
-                    isCustomPlan: true,
-                    customPlanData: customPlan
-                  });
+                  if (subscriptionStatus.hasActivePlan) {
+                    Alert.alert(
+                      'Plan Unavailable',
+                      'You already have an active base plan. You can purchase add-ons.'
+                    );
+                  } else {
+                    navigation.navigate('PlanDetails', {
+                      planId: customPlan._id,
+                      isCustomPlan: true,
+                      customPlanData: customPlan
+                    });
+                  }
                 }}
               >
-                <View style={[styles.cardAccent, { backgroundColor: '#9C27B0' }]} />
+                <View style={[styles.cardAccent, { backgroundColor: subscriptionStatus.hasActivePlan ? '#CCC' : '#9C27B0' }]} />
                 <View style={styles.cardLeft}>
                   <View style={styles.cardHeaderRow}>
-                    <Icon name="build" size={20} color="#9C27B0" style={{ marginRight: 6 }} />
-                    <Text style={[styles.planName, styles.customPlanName]}>
+                    <Icon name="build" size={20} color={subscriptionStatus.hasActivePlan ? '#CCC' : '#9C27B0'} style={{ marginRight: 6 }} />
+                    <Text style={[styles.planName, styles.customPlanName, subscriptionStatus.hasActivePlan && styles.planNameDisabled]}>
                       {customPlan.name || 'Custom Plan'}
                     </Text>
                     <View style={styles.customPlanBadge}>
                       <Icon name="star" size={10} color="#9C27B0" />
                       <Text style={styles.customPlanBadgeText}>CUSTOM</Text>
                     </View>
+                    {subscriptionStatus.hasActivePlan && (
+                      <View style={styles.disabledBadge}>
+                        <Icon name="lock" size={12} color="#666" />
+                        <Text style={styles.disabledBadgeText}>Active Plan</Text>
+                      </View>
+                    )}
                   </View>
-                  <Text style={[styles.planDescription, styles.customPlanDescription]} numberOfLines={2}>
+                  <Text style={[styles.planDescription, styles.customPlanDescription, subscriptionStatus.hasActivePlan && styles.planDescriptionDisabled]} numberOfLines={2}>
                     Custom plan: {customPlan.minUsers}-{customPlan.maxUsers} users for {customPlan.durationValue} {customPlan.durationUnit}
                   </Text>
                   <View style={styles.planDetails}>
                     <View style={styles.detailItem}>
-                      <Icon name="group" size={16} color="#9C27B0" />
-                      <Text style={styles.detailText}>{customPlan.minUsers}-{customPlan.maxUsers} users</Text>
+                      <Icon name="group" size={16} color={subscriptionStatus.hasActivePlan ? '#CCC' : '#9C27B0'} />
+                      <Text style={[styles.detailText, subscriptionStatus.hasActivePlan && styles.detailTextDisabled]}>{customPlan.minUsers}-{customPlan.maxUsers} users</Text>
                     </View>
                     <View style={styles.detailItem}>
-                      <Icon name="schedule" size={16} color="#9C27B0" />
-                      <Text style={styles.detailText}>{customPlan.durationValue} {customPlan.durationUnit}</Text>
+                      <Icon name="schedule" size={16} color={subscriptionStatus.hasActivePlan ? '#CCC' : '#9C27B0'} />
+                      <Text style={[styles.detailText, subscriptionStatus.hasActivePlan && styles.detailTextDisabled]}>{customPlan.durationValue} {customPlan.durationUnit}</Text>
                     </View>
                   </View>
                   <Text style={styles.planPrice}>
-                    <Icon name="attach-money" size={18} color="#9C27B0" />
-                    <Text style={[styles.priceText, styles.customPlanPrice]}> {customPlan.price?.toLocaleString()}₹</Text>
+                    <Icon name="attach-money" size={18} color={subscriptionStatus.hasActivePlan ? '#CCC' : '#9C27B0'} />
+                    <Text style={[styles.priceText, styles.customPlanPrice, subscriptionStatus.hasActivePlan && styles.priceTextDisabled]}> {customPlan.price?.toLocaleString()}₹</Text>
                   </Text>
                   <View style={styles.customPlanActions}>
                     <TouchableOpacity
-                      style={styles.editCustomPlanButton}
+                      style={[styles.editCustomPlanButton, subscriptionStatus.hasActivePlan && { opacity: 0.5 }]}
                       onPress={(e) => {
                         e.stopPropagation();
-                        setIsEditingCustomPlan(true);
-                        setShowCustomPlanModal(true);
+                        if (subscriptionStatus.hasActivePlan) {
+                          Alert.alert(
+                            'Plan Unavailable',
+                            'You already have an active base plan. You can purchase add-ons.'
+                          );
+                        } else {
+                          setIsEditingCustomPlan(true);
+                          setShowCustomPlanModal(true);
+                        }
                       }}>
-                      <Icon name="edit" size={14} color="#9C27B0" />
-                      <Text style={styles.editCustomPlanText}>Edit</Text>
+                      <Icon name="edit" size={14} color={subscriptionStatus.hasActivePlan ? '#CCC' : '#9C27B0'} />
+                      <Text style={[styles.editCustomPlanText, subscriptionStatus.hasActivePlan && { color: '#CCC' }]}>Edit</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

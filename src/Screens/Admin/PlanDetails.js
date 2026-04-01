@@ -21,7 +21,9 @@ import {
   isAddOnPlan,
   getPurchaseEligibility,
   getUserCustomPlan,
-  checkCustomPlanPurchaseEligibility
+  checkCustomPlanPurchaseEligibility,
+  getAllCoupons,
+  getCouponById
 } from '../../services/PlansService';
 import RazorpayCheckout from 'react-native-razorpay';
 import CustomHeader from '../../Component/CustomHeader';
@@ -47,6 +49,13 @@ export default function PlanDetails({ route, navigation }) {
   const [hasPurchasedCustomPlan, setHasPurchasedCustomPlan] = useState(false);
   const [checkingCustomPlanPurchase, setCheckingCustomPlanPurchase] = useState(false);
 
+  // Coupon state
+  const [coupons, setCoupons] = useState([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [selectedCoupon, setSelectedCoupon] = useState(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [showCoupons, setShowCoupons] = useState(false);
+
   // Check if buy button should be disabled
   const isAddOn = plan ? isAddOnPlan(plan.name) : false;
   const eligibility = getPurchaseEligibility(subscriptionStatus, plan?.name || '');
@@ -67,6 +76,7 @@ export default function PlanDetails({ route, navigation }) {
     }
 
     fetchSubscriptionStatus();
+    fetchCoupons();
 
     // Verify Razorpay availability
     const timer = setTimeout(() => {
@@ -122,6 +132,43 @@ export default function PlanDetails({ route, navigation }) {
     }
   };
 
+  // Fetch all active coupons
+  const fetchCoupons = async () => {
+    try {
+      setLoadingCoupons(true);
+      const response = await getAllCoupons({ status: 'active', limit: 50 });
+      if (response.success && response.data) {
+        setCoupons(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching coupons:', error);
+      setCoupons([]);
+    } finally {
+      setLoadingCoupons(false);
+    }
+  };
+
+  // Get coupon details by ID
+  const handleSelectCoupon = async (couponId) => {
+    try {
+      const response = await getCouponById(couponId);
+      if (response.success && response.data) {
+        setSelectedCoupon(response.data);
+        setCouponCode(response.data.code);
+        setShowCoupons(false);
+      }
+    } catch (error) {
+      console.error('Error fetching coupon details:', error);
+      Alert.alert('Error', 'Failed to fetch coupon details');
+    }
+  };
+
+  // Clear selected coupon
+  const handleClearCoupon = () => {
+    setSelectedCoupon(null);
+    setCouponCode('');
+  };
+
   const handleBuyPlan = async () => {
     if (!plan) return;
 
@@ -160,8 +207,8 @@ export default function PlanDetails({ route, navigation }) {
         orderResponse = await createAddonOrder(planId, subscriptionStatus.currentPaymentId);
         useAddonPayment = true;
       } else {
-        // Base plan or custom plan - use createOrder
-        orderResponse = await createOrder(planId);
+        // Base plan or custom plan - use createOrder with coupon code
+        orderResponse = await createOrder(planId, couponCode || null);
       }
 
       if (!orderResponse.success) {
@@ -488,6 +535,94 @@ export default function PlanDetails({ route, navigation }) {
             <Text style={[styles.infoValue, styles.planId]}>{plan.id || plan._id}</Text>
           </View>
         </View>
+
+        {/* Coupon Section */}
+        {!isAddOn && (
+          <View style={styles.couponSection}>
+            <View style={styles.sectionHeader}>
+              <Icon name="local-offer" size={22} color="#4A90E2" />
+              <Text style={styles.sectionTitle}>Apply Coupon</Text>
+            </View>
+            
+            {selectedCoupon ? (
+              <View style={styles.selectedCouponCard}>
+                <View style={styles.selectedCouponInfo}>
+                  <View style={styles.couponCodeBadge}>
+                    <Text style={styles.couponCodeText}>{selectedCoupon.code}</Text>
+                  </View>
+                  <Text style={styles.couponDescription}>{selectedCoupon.description}</Text>
+                  <Text style={styles.couponDiscount}>
+                    {selectedCoupon.discountType === 'percentage' 
+                      ? `${selectedCoupon.discountValue}% OFF` 
+                      : `₹${selectedCoupon.discountValue} OFF`}
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.removeCouponButton}
+                  onPress={handleClearCoupon}
+                >
+                  <Icon name="close" size={20} color="#E74C3C" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.couponSelectorButton}
+                onPress={() => setShowCoupons(!showCoupons)}
+              >
+                <Icon name="local-offer" size={20} color="#4A90E2" />
+                <Text style={styles.couponSelectorText}>
+                  {showCoupons ? 'Hide Coupons' : 'View Available Coupons'}
+                </Text>
+                <Icon 
+                  name={showCoupons ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
+                  size={20} 
+                  color="#4A90E2" 
+                />
+              </TouchableOpacity>
+            )}
+
+            {showCoupons && !selectedCoupon && (
+              <View style={styles.couponsList}>
+                {loadingCoupons ? (
+                  <View style={styles.loadingCouponsContainer}>
+                    <ActivityIndicator size="small" color="#4A90E2" />
+                    <Text style={styles.loadingCouponsText}>Loading coupons...</Text>
+                  </View>
+                ) : coupons.length === 0 ? (
+                  <View style={styles.noCouponsContainer}>
+                    <Icon name="info-outline" size={24} color="#999" />
+                    <Text style={styles.noCouponsText}>No coupons available</Text>
+                  </View>
+                ) : (
+                  coupons.map((coupon) => (
+                    <TouchableOpacity
+                      key={coupon._id}
+                      style={styles.couponCard}
+                      onPress={() => handleSelectCoupon(coupon._id)}
+                    >
+                      <View style={styles.couponCardLeft}>
+                        <View style={styles.couponCodeBadge}>
+                          <Text style={styles.couponCodeText}>{coupon.code}</Text>
+                        </View>
+                        <Text style={styles.couponDescription} numberOfLines={1}>
+                          {coupon.description}
+                        </Text>
+                      </View>
+                      <View style={styles.couponCardRight}>
+                        <Text style={styles.couponDiscount}>
+                          {coupon.discountType === 'percentage' 
+                            ? `${coupon.discountValue}% OFF` 
+                            : `₹${coupon.discountValue} OFF`}
+                        </Text>
+                        <Icon name="chevron-right" size={20} color="#4A90E2" />
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Buy Plan Button */}
         <TouchableOpacity
@@ -897,5 +1032,118 @@ const styles = StyleSheet.create({
   buyButtonDisabled: {
     backgroundColor: '#CCC',
     shadowOpacity: 0,
+  },
+  couponSection: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  couponSelectorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#E3F2FD',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  couponSelectorText: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    fontFamily: 'Rubik-Medium',
+    color: '#4A90E2',
+  },
+  selectedCouponCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#E8F5E9',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#27AE60',
+  },
+  selectedCouponInfo: {
+    flex: 1,
+  },
+  removeCouponButton: {
+    padding: 4,
+  },
+  couponsList: {
+    marginTop: 12,
+  },
+  couponCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  couponCardLeft: {
+    flex: 1,
+    marginRight: 8,
+  },
+  couponCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  couponCodeBadge: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  couponCodeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Rubik-Bold',
+  },
+  couponDescription: {
+    fontSize: 12,
+    fontFamily: 'Rubik-Regular',
+    color: '#666',
+    marginBottom: 2,
+  },
+  couponDiscount: {
+    fontSize: 14,
+    fontFamily: 'Rubik-Bold',
+    color: '#27AE60',
+  },
+  loadingCouponsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  loadingCouponsText: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontFamily: 'Rubik-Regular',
+    color: '#666',
+  },
+  noCouponsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  noCouponsText: {
+    marginTop: 8,
+    fontSize: 14,
+    fontFamily: 'Rubik-Regular',
+    color: '#999',
   },
 });

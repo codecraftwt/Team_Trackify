@@ -586,3 +586,115 @@ export const checkCustomPlanPurchaseEligibility = async () => {
     return { hasPurchased: false };
   }
 };
+
+// ==================== COUPON APIS ====================
+
+/**
+ * Get all coupons with pagination and filters
+ * @param {Object} options - Query options
+ * @param {number} [options.page=1] - Page number
+ * @param {number} [options.limit=10] - Items per page
+ * @param {string} [options.status] - Filter by status (active/inactive)
+ * @param {string} [options.search] - Search by code or description
+ * @param {string} [options.discountType] - Filter by discount type (percentage/fixed)
+ * @param {string} [options.sortBy=createdAt] - Sort field
+ * @param {string} [options.sortOrder=desc] - Sort order (asc/desc)
+ * @returns {Promise<Object>} - Object containing coupons data, stats, and pagination info
+ */
+export const getAllCoupons = async (options = {}) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      search,
+      discountType,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = options;
+
+    // Build query parameters
+    const params = new URLSearchParams();
+    params.append('page', page);
+    params.append('limit', limit);
+    if (status) params.append('status', status);
+    if (search) params.append('search', search);
+    if (discountType) params.append('discountType', discountType);
+    if (sortBy) params.append('sortBy', sortBy);
+    if (sortOrder) params.append('sortOrder', sortOrder);
+
+    // Get auth token
+    let token = await AsyncStorage.getItem('token');
+    if (!token) {
+      token = await AsyncStorage.getItem('authToken');
+    }
+
+    const response = await Api.get(`/api/coupon?${params.toString()}`, {
+      headers: token ? { 
+        Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` 
+      } : {}
+    });
+    console.log('Fetched coupons:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching coupons:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Failed to fetch coupons');
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection.');
+    } else {
+      throw new Error('Something went wrong. Please try again.');
+    }
+  }
+};
+
+/**
+ * Get a single coupon by ID
+ * @param {string} couponId - Coupon ID
+ * @returns {Promise<Object>} - Coupon object
+ */
+export const getCouponById = async (couponId) => {
+  try {
+    if (!couponId) {
+      throw new Error('Coupon ID is required');
+    }
+
+    // Get auth token
+    let token = await AsyncStorage.getItem('token');
+    if (!token) {
+      token = await AsyncStorage.getItem('authToken');
+    }
+
+    const response = await Api.get(`/api/coupon/${couponId}`, {
+      headers: token ? { 
+        Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` 
+      } : {}
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching coupon:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    if (error.response) {
+      if (error.response.status === 404) {
+        throw new Error('Coupon not found');
+      }
+      throw new Error(error.response.data?.message || 'Failed to fetch coupon');
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection.');
+    } else {
+      throw new Error(error.message || 'Something went wrong. Please try again.');
+    }
+  }
+};
+
+// ==================== END COUPON APIS ====================

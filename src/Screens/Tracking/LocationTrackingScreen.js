@@ -135,7 +135,8 @@ const isValidLocation = (latitude, longitude) =>
   Number.isFinite(latitude) &&
   Number.isFinite(longitude) &&
   Math.abs(latitude) <= 90 &&
-  Math.abs(longitude) <= 180;
+  Math.abs(longitude) <= 180 &&
+  !(latitude === 0 && longitude === 0);
 
 const distanceMeters = (aLat, aLng, bLat, bLng) => {
   const R = 6371e3;
@@ -1413,8 +1414,14 @@ const LocationTrackingScreen = () => {
     () => [...locations].sort((a, b) => a.timestamp - b.timestamp),
     [locations],
   );
-  const startMarker = sortedLocations[0] || null;
-  const endMarker = sortedLocations[sortedLocations.length - 1] || null;
+
+  // Prefer explicit start/end sources so duplicate/late points don't shift markers.
+  const startMarker =
+    sortedLocations.find(p => p?.source === 'start') || sortedLocations[0] || null;
+  const endMarker =
+    [...sortedLocations].reverse().find(p => p?.source === 'end') ||
+    sortedLocations[sortedLocations.length - 1] ||
+    null;
   const segments = useMemo(() => segmentByOnlineStatus(sortedLocations), [sortedLocations]);
 
   const startCoordinate = useMemo(() => {

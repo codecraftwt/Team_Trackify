@@ -73,6 +73,7 @@ const extractLatLngFromLocation = (loc) => {
   let lng = parseFiniteNumber(lngRaw);
 
   if (isValidLatitude(lat) && isValidLongitude(lng)) {
+    if (lat === 0 && lng === 0) return null; // Treat (0,0) as invalid/no data
     return { latitude: lat, longitude: lng };
   }
 
@@ -80,6 +81,7 @@ const extractLatLngFromLocation = (loc) => {
   const swappedLat = parseFiniteNumber(lngRaw);
   const swappedLng = parseFiniteNumber(latRaw);
   if (isValidLatitude(swappedLat) && isValidLongitude(swappedLng)) {
+    if (swappedLat === 0 && swappedLng === 0) return null;
     return { latitude: swappedLat, longitude: swappedLng };
   }
 
@@ -295,9 +297,30 @@ const SessionDetailsMap = () => {
     return endCoordinate;
   }, [polylineSegments, endCoordinate]);
 
-  const photoLocations = sortedLocationsWithCoords.filter(
+  const photoLocationsRaw = sortedLocationsWithCoords.filter(
     (l) => (l?.photoUrl ?? l?.photo ?? l?.photoPath ?? l?.photoUri)
   );
+
+  // De-dupe photo markers/cards (server may contain duplicates from offline merges).
+  const photoLocations = (() => {
+    const seen = new Set();
+    const out = [];
+    for (const loc of photoLocationsRaw) {
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) continue;
+      const ts = normalizeTimestamp(loc.timestamp ?? loc.time ?? loc.createdAt);
+      const src = String(loc.source || '').toLowerCase();
+      const remark = loc.remark != null ? String(loc.remark).trim() : '';
+      const amount = loc.amount != null ? String(loc.amount) : '';
+      const hasPhoto = loc?.photoUrl ?? loc?.photo ?? loc?.photoPath ?? loc?.photoUri ? '1' : '0';
+      const key = [lat.toFixed(6), lng.toFixed(6), ts, src, hasPhoto, remark, amount].join('|');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(loc);
+    }
+    return out;
+  })();
 
   const renderRouteMarkers = (keyPrefix) => (
     <>
@@ -308,7 +331,7 @@ const SessionDetailsMap = () => {
             latitude: Number(loc.latitude),
             longitude: Number(loc.longitude),
           }}
-          pinColor="#DC2626"
+          pinColor="#FF8C00"
           title="Photo Location"
           description={
             loc.remark != null && String(loc.remark).trim() !== '' 
@@ -333,7 +356,7 @@ const SessionDetailsMap = () => {
         <Marker
           key={`${keyPrefix}-end`}
           coordinate={renderedEndCoordinate}
-          pinColor="#FF8C00"
+          pinColor="#DC2626"
           title="End"
           zIndex={1001}
         />
@@ -341,12 +364,32 @@ const SessionDetailsMap = () => {
     </>
   );
 
-  const locationsWithPhotoOrRemark = sortedLocationsWithCoords.filter(
+  const locationsWithPhotoOrRemarkRaw = sortedLocationsWithCoords.filter(
     (l) =>
       (l?.photoUrl ?? l?.photo ?? l?.photoPath ?? l?.photoUri) ||
       (l?.remark != null && String(l.remark).trim() !== '') ||
       (l?.amount != null && String(l.amount).trim() !== '')
   );
+
+  const locationsWithPhotoOrRemark = (() => {
+    const seen = new Set();
+    const out = [];
+    for (const loc of locationsWithPhotoOrRemarkRaw) {
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) continue;
+      const ts = normalizeTimestamp(loc.timestamp ?? loc.time ?? loc.createdAt);
+      const src = String(loc.source || '').toLowerCase();
+      const remark = loc.remark != null ? String(loc.remark).trim() : '';
+      const amount = loc.amount != null ? String(loc.amount) : '';
+      const hasPhoto = loc?.photoUrl ?? loc?.photo ?? loc?.photoPath ?? loc?.photoUri ? '1' : '0';
+      const key = [lat.toFixed(6), lng.toFixed(6), ts, src, hasPhoto, remark, amount].join('|');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(loc);
+    }
+    return out;
+  })();
 
   const handlePhotoCardPress = useCallback(
     (loc) => {

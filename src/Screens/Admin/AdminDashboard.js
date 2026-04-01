@@ -313,9 +313,9 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
     return status === 'active' ? 'fiber-manual-record' : 'check-circle';
   };
 
-  const formatTimeAgo = () => {
-    return 'Just now';
-  };
+  // const formatTimeAgo = () => {
+  //   return 'Just now';
+  // };
 
   if (loading) {
     return (
@@ -953,12 +953,12 @@ const TeamTrackifyDashboard = ({ navigation, route }) => {
                         </View>
                       </View>
 
-                      <View style={styles.activityFooter}>
+                      {/* <View style={styles.activityFooter}>
                         <View style={styles.activityTime}>
                           <Icon name="access-time" size={14} color="#999" />
                           <Text style={styles.activityTimeText}>{formatTimeAgo()}</Text>
                         </View>
-                      </View>
+                      </View> */}
                     </View>
                   </View>
                 ))}
@@ -1204,21 +1204,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Poppins-Medium',
   },
-  activityFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  activityTime: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  activityTimeText: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Regular',
-    color: '#999',
-  },
+  // activityFooter: {
+  //   flexDirection: 'row',
+  //   justifyContent: 'space-between',
+  //   alignItems: 'center',
+  // },
+  // activityTime: {
+  //   flexDirection: 'row',
+  //   alignItems: 'center',
+  //   gap: 4,
+  // },
+  // activityTimeText: {
+  //   fontSize: 11,
+  //   fontFamily: 'Poppins-Regular',
+  //   color: '#999',
+  // },
   recentEmptyState: {
     alignItems: 'center',
     justifyContent: 'center',

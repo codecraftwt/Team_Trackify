@@ -295,10 +295,29 @@ const TrackingSessionDetailScreen = () => {
 
   // Normalise & sort locations so that first point is the true start
   // Find start location (source === 'start') or use earliest timestamp
-  const startLocationFromSource = locations.find((l) => l?.source === 'start');
-  const locationsWithCoords = locations.filter(
-    (l) => l?.latitude != null && l?.longitude != null
-  );
+  const startLocationFromSource = locations.find((l) => {
+    const lat = Number(l?.latitude);
+    const lng = Number(l?.longitude);
+    return (
+      l?.source === 'start' &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      !(lat === 0 && lng === 0) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lng) <= 180
+    );
+  });
+  const locationsWithCoords = locations.filter((l) => {
+    const lat = Number(l?.latitude);
+    const lng = Number(l?.longitude);
+    return (
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      !(lat === 0 && lng === 0) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lng) <= 180
+    );
+  });
   const sortedLocationsWithCoords = [...locationsWithCoords].sort((a, b) => {
     const ta = normalizeTimestamp(a.timestamp ?? a.time ?? a.createdAt);
     const tb = normalizeTimestamp(b.timestamp ?? b.time ?? b.createdAt);
@@ -308,7 +327,16 @@ const TrackingSessionDetailScreen = () => {
   // Use source='start' location if available, otherwise use the first sorted location
   // Also, if there's a location with photo, prefer that for the start marker
   const startLocationWithPhoto = locations.find(
-    (l) => l?.photo || l?.photoUrl || l?.photoUri || l?.photoPath
+    (l) => {
+      const lat = Number(l?.latitude);
+      const lng = Number(l?.longitude);
+      return (
+        (l?.photo || l?.photoUrl || l?.photoUri || l?.photoPath) &&
+        Number.isFinite(lat) &&
+        Number.isFinite(lng) &&
+        !(lat === 0 && lng === 0)
+      );
+    }
   );
   
   // Determine the actual start location to display: prefer source='start', then any location with photo, then first by timestamp
@@ -358,7 +386,16 @@ const TrackingSessionDetailScreen = () => {
   );
 
   // Find the end location (source === 'end')
-  const endLocation = locations.find((l) => l?.source === 'end');
+  const endLocation = locations.find((l) => {
+    const lat = Number(l?.latitude);
+    const lng = Number(l?.longitude);
+    return (
+      l?.source === 'end' &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      !(lat === 0 && lng === 0)
+    );
+  });
 
   // If no end location found by source, use the last location (sorted by timestamp)
   const endFromLastPoint = sortedLocationsWithCoords.length > 0
@@ -368,7 +405,17 @@ const TrackingSessionDetailScreen = () => {
   // Find any location with a photo that could be the end location
   // Priority: source='end' > any location with photo > last point by timestamp
   const endLocationWithPhoto = locations.find(
-    (l) => (l?.photo || l?.photoUrl || l?.photoUri || l?.photoPath) && l?.source !== 'start'
+    (l) => {
+      const lat = Number(l?.latitude);
+      const lng = Number(l?.longitude);
+      return (
+        (l?.photo || l?.photoUrl || l?.photoUri || l?.photoPath) &&
+        l?.source !== 'start' &&
+        Number.isFinite(lat) &&
+        Number.isFinite(lng) &&
+        !(lat === 0 && lng === 0)
+      );
+    }
   );
 
   // Determine final end location - prefer source='end', then any photo location, then last point
@@ -387,12 +434,34 @@ const TrackingSessionDetailScreen = () => {
     };
   }
 
-  const photoLocations = locations.filter(
+  const photoLocationsRaw = locations.filter(
     (l) =>
-      (l?.photoUrl || l?.photo || l?.photoPath || l?.photoUri) && // Check all possible photo fields
-      l?.latitude != null &&
-      l?.longitude != null
+      (l?.photoUrl || l?.photo || l?.photoPath || l?.photoUri) &&
+      Number.isFinite(Number(l?.latitude)) &&
+      Number.isFinite(Number(l?.longitude)) &&
+      !(Number(l?.latitude) === 0 && Number(l?.longitude) === 0)
   );
+
+  // De-dupe photo locations so merged duplicate sessions don't render the same image twice.
+  const photoLocations = (() => {
+    const seen = new Set();
+    const out = [];
+    for (const loc of photoLocationsRaw) {
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      const ts = normalizeTimestamp(loc.timestamp ?? loc.time ?? loc.createdAt);
+      const src = String(loc.source || '').toLowerCase();
+      const remark = loc.remark != null ? String(loc.remark).trim() : '';
+      const amount = loc.amount != null ? String(loc.amount) : '';
+      const hasPhoto = loc?.photoUrl || loc?.photo || loc?.photoUri || loc?.photoPath ? '1' : '0';
+
+      const key = [lat.toFixed(6), lng.toFixed(6), ts, src, hasPhoto, remark, amount].join('|');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(loc);
+    }
+    return out;
+  })();
 
   // Handle marker press to show modal
   // const handleMarkerPress = useCallback((markerType, location) => {
@@ -556,6 +625,28 @@ const renderRouteMarkers = (keyPrefix) => (
       (l?.amount != null && String(l.amount).trim() !== '')
   );
 
+  // De-dupe carousel cards too (same fingerprint as photo markers).
+  const locationsWithPhotoOrRemarkDeduped = (() => {
+    const seen = new Set();
+    const out = [];
+    for (const loc of locationsWithPhotoOrRemark) {
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) continue;
+      const ts = normalizeTimestamp(loc.timestamp ?? loc.time ?? loc.createdAt);
+      const src = String(loc.source || '').toLowerCase();
+      const remark = loc.remark != null ? String(loc.remark).trim() : '';
+      const amount = loc.amount != null ? String(loc.amount) : '';
+      const hasPhoto = loc?.photoUrl || loc?.photo || loc?.photoUri || loc?.photoPath ? '1' : '0';
+
+      const key = [lat.toFixed(6), lng.toFixed(6), ts, src, hasPhoto, remark, amount].join('|');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(loc);
+    }
+    return out;
+  })();
+
   const handlePhotoCardPress = useCallback(
     (loc) => {
       if (!loc || !mapRef.current) return;
@@ -658,12 +749,12 @@ const renderRouteMarkers = (keyPrefix) => (
             </MapView>
           </View>
 
-          {locationsWithPhotoOrRemark.length > 0 && (
+          {locationsWithPhotoOrRemarkDeduped.length > 0 && (
             <View style={styles.photoCarouselSection}>
               <FlatList
                 style={{ flex: 1 }}
                 horizontal
-                data={locationsWithPhotoOrRemark}
+                data={locationsWithPhotoOrRemarkDeduped}
                 keyExtractor={(loc, index) => String(loc.id ?? index)}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.photoCarouselContent}

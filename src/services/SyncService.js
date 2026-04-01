@@ -6,6 +6,8 @@ import {
   getUnsyncedLocations,
   markLocationSynced,
   updateSessionServerId,
+  updateSessionPunchInPhoto,
+  updateSessionPunchOutPhoto,
   // endLocalSession,
   getSessionByLocalId,
   getAllLocationsForSession,
@@ -14,6 +16,167 @@ import {
 
 const SYNC_DEBOUNCE_MS = 3000; // Minimum 2 seconds between sync triggers (reduced from 5s for faster sync)
 const LOCK_TIMEOUT_MS = 20000; // 15 seconds timeout for session creation locks (reduced from 30s for faster sync)
+const MIN_DISTANCE_METERS = 10;
+const MAX_ACCEPTABLE_ACCURACY_METERS = 60;
+const MAX_TELEPORT_DISTANCE_METERS = 500;
+const MAX_REALISTIC_SPEED_MPS = 70;
+
+const normalizeTimestamp = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 0 && value < 1e12 ? value * 1000 : value;
+  }
+  if (typeof value === 'string') {
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber)) {
+      return asNumber > 0 && asNumber < 1e12 ? asNumber * 1000 : asNumber;
+    }
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return Date.now();
+};
+
+const distanceMeters = (lat1, lon1, lat2, lon2) => {
+  const R = 6371e3;
+  const phi1 = (lat1 * Math.PI) / 180;
+  const phi2 = (lat2 * Math.PI) / 180;
+  const dPhi = ((lat2 - lat1) * Math.PI) / 180;
+  const dLambda = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dPhi / 2) ** 2
+    + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLambda / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+const toFixedCoord = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(6) : 'NaN';
+};
+
+const hasBusinessPayload = (point) => {
+  const source = (point?.source || '').toLowerCase();
+  return Boolean(
+    (typeof point?.photoUri === 'string' && point.photoUri.trim().length > 0)
+    || (typeof point?.remark === 'string' && point.remark.trim().length > 0)
+    || point?.amount != null
+    || source === 'photo'
+    || source === 'start'
+    || source === 'end'
+  );
+};
+
+const pointFingerprint = (point) => {
+  return [
+    normalizeTimestamp(point?.timestamp),
+    toFixedCoord(point?.latitude),
+    toFixedCoord(point?.longitude),
+    (point?.source || 'foreground').toLowerCase(),
+  ].join('|');
+};
+
+// Business/photo points (photos, start/end) are where duplicates are most visible.
+// We dedupe using a stable fingerprint that doesn't depend on the local file path.
+const businessPointFingerprint = (point) => {
+  const remark = typeof point?.remark === 'string' ? point.remark.trim() : '';
+  const amount = point?.amount != null ? String(point.amount) : '';
+  const hasPhoto = point?.photoUri && typeof point.photoUri === 'string' && point.photoUri.trim().length > 0;
+
+  return [
+    normalizeTimestamp(point?.timestamp),
+    toFixedCoord(point?.latitude),
+    toFixedCoord(point?.longitude),
+    (point?.source || 'business').toLowerCase(),
+    hasPhoto ? 'photo:1' : 'photo:0',
+    remark,
+    amount,
+  ].join('|');
+};
+
+const preparePointsForUpload = (points) => {
+  if (!Array.isArray(points) || points.length === 0) {
+    return { uploadPoints: [], skippedIds: [], stats: {} };
+  }
+
+  const sorted = [...points].sort((a, b) => {
+    const ta = normalizeTimestamp(a?.timestamp);
+    const tb = normalizeTimestamp(b?.timestamp);
+    if (ta !== tb) return ta - tb;
+    return String(a?.id || '').localeCompare(String(b?.id || ''));
+  });
+
+  const seen = new Set();
+  const uploadPoints = [];
+  const skippedIds = [];
+  let lastKept = null;
+  const stats = { duplicate: 0, inaccurate: 0, tooClose: 0, teleport: 0, outOfOrder: 0 };
+
+  for (const point of sorted) {
+    const businessPoint = hasBusinessPayload(point);
+    const ts = normalizeTimestamp(point?.timestamp);
+    const lat = Number(point?.latitude);
+    const lng = Number(point?.longitude);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      skippedIds.push(point.id);
+      continue;
+    }
+
+    // De-duplicate business/photo points too. Offline session dedup/relocation can otherwise
+    // upload the same photo markers/events multiple times to the server.
+    const fp = businessPoint ? businessPointFingerprint(point) : pointFingerprint(point);
+    if (seen.has(fp)) {
+      stats.duplicate += 1;
+      skippedIds.push(point.id);
+      continue;
+    }
+    seen.add(fp);
+
+    const acc = point?.accuracy == null ? null : Number(point.accuracy);
+    if (!businessPoint && Number.isFinite(acc) && acc > MAX_ACCEPTABLE_ACCURACY_METERS) {
+      stats.inaccurate += 1;
+      skippedIds.push(point.id);
+      continue;
+    }
+
+    if (lastKept && !businessPoint) {
+      const prevTs = normalizeTimestamp(lastKept.timestamp);
+      if (ts < prevTs) {
+        stats.outOfOrder += 1;
+        skippedIds.push(point.id);
+        continue;
+      }
+
+      const d = distanceMeters(
+        Number(lastKept.latitude),
+        Number(lastKept.longitude),
+        lat,
+        lng
+      );
+      const elapsedMs = Math.max(1, ts - prevTs);
+      const speedMps = d / (elapsedMs / 1000);
+      const looksLikeTeleport = d > MAX_TELEPORT_DISTANCE_METERS && speedMps > MAX_REALISTIC_SPEED_MPS;
+
+      if (looksLikeTeleport) {
+        stats.teleport += 1;
+        skippedIds.push(point.id);
+        continue;
+      }
+
+      if (d < MIN_DISTANCE_METERS) {
+        stats.tooClose += 1;
+        skippedIds.push(point.id);
+        continue;
+      }
+    }
+
+    uploadPoints.push(point);
+    lastKept = { latitude: lat, longitude: lng, timestamp: ts };
+  }
+
+  return { uploadPoints, skippedIds, stats };
+};
 
 // IMPORTANT:
 // This module can be loaded more than once in some bundling/dev scenarios.
@@ -47,10 +210,15 @@ const cleanupStaleLocks = () => {
 };
 
 // Helper function to end session on server with retry logic
-const endSessionOnServerWithRetry = async (serverSessionId, punchOutPhoto, maxRetries = 2) => {
+const endSessionOnServerWithRetry = async (
+  serverSessionId,
+  punchOutPhoto,
+  endLocationData,
+  maxRetries = 2
+) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      await TrackingService.endSession(serverSessionId, punchOutPhoto);
+      await TrackingService.endSession(serverSessionId, punchOutPhoto, endLocationData);
       console.log('[SyncService] Successfully ended session on server:', serverSessionId);
       return { success: true };
     } catch (err) {
@@ -110,8 +278,12 @@ export const syncPendingLocations = async () => {
       // Split sessions:
       // - dedupCandidates: sessions that have unsynced points (relocation + server uploads)
       // - nonDedupSessions: sessions without unsynced points (may still need server "end" if status === 'ended')
-      const dedupCandidates = sessionsWithUnsynced.filter(s => s.unsyncedCount > 0);
-      const nonDedupSessions = sessionsWithUnsynced.filter(s => s.unsyncedCount <= 0);
+      const dedupCandidates = sessionsWithUnsynced.filter(
+        s => s.unsyncedCount > 0 || s.session.status === 'ended'
+      );
+      const nonDedupSessions = sessionsWithUnsynced.filter(
+        s => !(s.unsyncedCount > 0 || s.session.status === 'ended')
+      );
 
       // Deduplicate sessions - if multiple sessions have similar start times (within 1 minute),
       // treat them as the same session and only create one server session
@@ -151,6 +323,26 @@ export const syncPendingLocations = async () => {
       for (const { duplicate, main } of duplicateSessions) {
         console.log('[SyncService] Relocating points from duplicate session to main session');
         const mainSessionInfo = await getSessionByLocalId(main.localSessionId);
+
+        // Merge punch photos if the chosen "main" session doesn't have them yet.
+        // This prevents missing markers after deduplication, especially for ended sessions.
+        try {
+          if (
+            mainSessionInfo?.punchOutPhotoUri == null &&
+            duplicate?.punchOutPhotoUri
+          ) {
+            await updateSessionPunchOutPhoto(main.localSessionId, duplicate.punchOutPhotoUri);
+          }
+          if (
+            mainSessionInfo?.punchInPhotoUri == null &&
+            duplicate?.punchInPhotoUri
+          ) {
+            await updateSessionPunchInPhoto(main.localSessionId, duplicate.punchInPhotoUri);
+          }
+        } catch (photoMergeErr) {
+          console.warn('[SyncService] Failed to merge punch photos:', photoMergeErr?.message || String(photoMergeErr));
+        }
+
         if (mainSessionInfo?.serverSessionId) {
           // If main session already has serverSessionId, relocate points to it
           await relocatePointsToSession(duplicate.localSessionId, main.localSessionId);
@@ -369,9 +561,20 @@ export const syncPendingLocations = async () => {
         const unsyncedPoints = await getUnsyncedLocations(session.localSessionId);
         console.log('[SyncService] Found unsynced points:', unsyncedPoints.length);
 
-        // Pre-check photo existence for all points to avoid repeated file system checks
+        // Normalize upload order and trim redundant/offending points before hitting network.
+        const { uploadPoints, skippedIds, stats } = preparePointsForUpload(unsyncedPoints);
+        if (skippedIds.length > 0) {
+          console.log('[SyncService] Filtering redundant points before upload:', {
+            skipped: skippedIds.length,
+            ...stats,
+          });
+          for (const skippedId of skippedIds) {
+            await markLocationSynced(skippedId);
+          }
+        }
+
         const photoExistenceCache = new Map();
-        for (const point of unsyncedPoints) {
+        for (const point of uploadPoints) {
           try {
             const formData = new FormData();
             formData.append('latitude', String(point.latitude));
@@ -394,10 +597,15 @@ export const syncPendingLocations = async () => {
             let photoFileExists = false;
             if (hasPhoto) {
               const photoPath = point.photoUri.startsWith('file://') ? point.photoUri.replace('file://', '') : point.photoUri;
-              try {
-                photoFileExists = await RNFS.exists(photoPath);
-              } catch {
-                photoFileExists = false;
+              if (photoExistenceCache.has(photoPath)) {
+                photoFileExists = photoExistenceCache.get(photoPath) === true;
+              } else {
+                try {
+                  photoFileExists = await RNFS.exists(photoPath);
+                } catch {
+                  photoFileExists = false;
+                }
+                photoExistenceCache.set(photoPath, photoFileExists);
               }
             }
 
@@ -438,6 +646,43 @@ export const syncPendingLocations = async () => {
             if (serverSession && serverSession.isActive === false) {
               console.log('[SyncService] Session is already ended on server, skipping end call');
             } else {
+              // Use last known local coordinates for the "end" payload.
+              // Without this, some backends default the end location to (0,0).
+              let endLocationData = null;
+              try {
+                const allLocationsForEnd = await getAllLocationsForSession(sessionToEnd.localSessionId);
+                // Pick the latest non-(0,0) location so the server "end" marker matches reality.
+                let lastNonZero = null;
+                for (let i = allLocationsForEnd.length - 1; i >= 0; i--) {
+                  const p = allLocationsForEnd[i];
+                  const lat = Number(p?.latitude);
+                  const lng = Number(p?.longitude);
+                  if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+                  if (lat === 0 && lng === 0) continue;
+                  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+                  lastNonZero = p;
+                  break;
+                }
+
+                if (lastNonZero) {
+                  endLocationData = {
+                    latitude: lastNonZero.latitude,
+                    longitude: lastNonZero.longitude,
+                    accuracy: lastNonZero.accuracy ?? null,
+                    heading: lastNonZero.heading ?? null,
+                    speed: lastNonZero.speed ?? null,
+                    address: lastNonZero.address ?? null,
+                    road: lastNonZero.road ?? null,
+                    area: lastNonZero.area ?? null,
+                    batteryPercentage: lastNonZero.batteryPercentage ?? null,
+                    isOnline: true,
+                    remark: 'Tracking ended',
+                  };
+                }
+              } catch (locErr) {
+                console.warn('[SyncService] Failed to compute end coordinates:', locErr?.message || String(locErr));
+              }
+
               // Try to get punch-out photo from session
               let punchOutPhoto = null;
               if (sessionToEnd.punchOutPhotoUri) {
@@ -460,7 +705,11 @@ export const syncPendingLocations = async () => {
               }
               
               // Use retry helper to end session
-              const endResult = await endSessionOnServerWithRetry(serverSessionId, punchOutPhoto);
+              const endResult = await endSessionOnServerWithRetry(
+                serverSessionId,
+                punchOutPhoto,
+                endLocationData
+              );
               if (!endResult.success) {
                 console.warn('[SyncService] Failed to end session after retries:', endResult.error);
                 // Don't throw - session is already ended locally, will retry on next sync
@@ -470,6 +719,40 @@ export const syncPendingLocations = async () => {
             console.warn('[SyncService] Failed to check session status on server:', checkErr?.message);
             // If we can't check status, try to end anyway with retry
             try {
+              // Same end location computation for the "can't check server state" fallback.
+              let endLocationData = null;
+              try {
+                const allLocationsForEnd = await getAllLocationsForSession(sessionToEnd.localSessionId);
+                let lastNonZero = null;
+                for (let i = allLocationsForEnd.length - 1; i >= 0; i--) {
+                  const p = allLocationsForEnd[i];
+                  const lat = Number(p?.latitude);
+                  const lng = Number(p?.longitude);
+                  if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+                  if (lat === 0 && lng === 0) continue;
+                  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) continue;
+                  lastNonZero = p;
+                  break;
+                }
+                if (lastNonZero) {
+                  endLocationData = {
+                    latitude: lastNonZero.latitude,
+                    longitude: lastNonZero.longitude,
+                    accuracy: lastNonZero.accuracy ?? null,
+                    heading: lastNonZero.heading ?? null,
+                    speed: lastNonZero.speed ?? null,
+                    address: lastNonZero.address ?? null,
+                    road: lastNonZero.road ?? null,
+                    area: lastNonZero.area ?? null,
+                    batteryPercentage: lastNonZero.batteryPercentage ?? null,
+                    isOnline: true,
+                    remark: 'Tracking ended',
+                  };
+                }
+              } catch (locErr) {
+                console.warn('[SyncService] Failed to compute end coordinates (fallback):', locErr?.message || String(locErr));
+              }
+
               // Try to get punch-out photo from session
               let punchOutPhoto = null;
               if (sessionToEnd.punchOutPhotoUri) {
@@ -492,7 +775,11 @@ export const syncPendingLocations = async () => {
               }
               
               // Use retry helper to end session
-              const endResult = await endSessionOnServerWithRetry(serverSessionId, punchOutPhoto);
+              const endResult = await endSessionOnServerWithRetry(
+                serverSessionId,
+                punchOutPhoto,
+                endLocationData
+              );
               if (!endResult.success) {
                 console.warn('[SyncService] Failed to end session after retries:', endResult.error);
               }
