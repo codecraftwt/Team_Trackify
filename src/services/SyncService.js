@@ -123,6 +123,18 @@ const preparePointsForUpload = (points) => {
       continue;
     }
 
+    // Filter out points with 0,0 coordinates (invalid location)
+    if (lat === 0 && lng === 0) {
+      console.warn('[SyncService] Skipping point with 0,0 coordinates (invalid):', {
+        id: point.id,
+        sessionLocalId: point.sessionLocalId,
+        source: point.source,
+        timestamp: point.timestamp,
+      });
+      skippedIds.push(point.id);
+      continue;
+    }
+
     // De-duplicate business/photo points too. Offline session dedup/relocation can otherwise
     // upload the same photo markers/events multiple times to the server.
     const fp = businessPoint ? businessPointFingerprint(point) : pointFingerprint(point);
@@ -576,9 +588,35 @@ export const syncPendingLocations = async () => {
         const photoExistenceCache = new Map();
         for (const point of uploadPoints) {
           try {
+            // CRITICAL: Validate coordinates one more time before uploading
+            const lat = Number(point.latitude);
+            const lng = Number(point.longitude);
+            
+            console.log('[SyncService] Preparing to upload point:', {
+              id: point.id,
+              sessionLocalId: point.sessionLocalId,
+              source: point.source,
+              lat,
+              lng,
+              hasPhoto: !!point.photoUri,
+              isOnline: point.isOnline,
+            });
+            
+            if (lat === 0 && lng === 0) {
+              console.error('[SyncService] ❌ BLOCKED upload of point with 0,0 coordinates:', {
+                id: point.id,
+                sessionLocalId: point.sessionLocalId,
+                source: point.source,
+                hasPhoto: !!point.photoUri,
+                isOnline: point.isOnline,
+              });
+              await markLocationSynced(point.id); // Mark as synced to prevent retry
+              continue;
+            }
+            
             const formData = new FormData();
-            formData.append('latitude', String(point.latitude));
-            formData.append('longitude', String(point.longitude));
+            formData.append('latitude', String(lat));
+            formData.append('longitude', String(lng));
             formData.append('timestamp', String(point.timestamp));
             formData.append('address', point.address || 'Unknown Address');
             formData.append('road', point.road || 'Unknown Road');
@@ -595,38 +633,88 @@ export const syncPendingLocations = async () => {
 
             const hasPhoto = point.photoUri && typeof point.photoUri === 'string' && point.photoUri.trim().length > 0;
             let photoFileExists = false;
+            let photoUri = null;
             if (hasPhoto) {
-              const photoPath = point.photoUri.startsWith('file://') ? point.photoUri.replace('file://', '') : point.photoUri;
-              if (photoExistenceCache.has(photoPath)) {
-                photoFileExists = photoExistenceCache.get(photoPath) === true;
-              } else {
-                try {
-                  photoFileExists = await RNFS.exists(photoPath);
-                } catch {
-                  photoFileExists = false;
+              // Try multiple path formats to find the photo file
+              const possiblePaths = [
+                point.photoUri,
+                point.photoUri.startsWith('file://') ? point.photoUri.replace('file://', '') : `file://${point.photoUri}`,
+                point.photoUri.startsWith('/') ? point.photoUri : `/${point.photoUri}`,
+              ];
+              
+              for (const testPath of possiblePaths) {
+                const cleanPath = testPath.startsWith('file://') ? testPath.replace('file://', '') : testPath;
+                if (photoExistenceCache.has(cleanPath)) {
+                  photoFileExists = photoExistenceCache.get(cleanPath) === true;
+                  if (photoFileExists) {
+                    photoUri = testPath.startsWith('file://') ? testPath : `file://${cleanPath}`;
+                    break;
+                  }
+                } else {
+                  try {
+                    photoFileExists = await RNFS.exists(cleanPath);
+                    photoExistenceCache.set(cleanPath, photoFileExists);
+                    if (photoFileExists) {
+                      photoUri = testPath.startsWith('file://') ? testPath : `file://${cleanPath}`;
+                      break;
+                    }
+                  } catch {
+                    photoExistenceCache.set(cleanPath, false);
+                  }
                 }
-                photoExistenceCache.set(photoPath, photoFileExists);
+              }
+              
+              // If still not found, try the original path as-is
+              if (!photoFileExists) {
+                try {
+                  const cleanPath = point.photoUri.startsWith('file://') ? point.photoUri.replace('file://', '') : point.photoUri;
+                  photoFileExists = await RNFS.exists(cleanPath);
+                  if (photoFileExists) {
+                    photoUri = point.photoUri.startsWith('file://') ? point.photoUri : `file://${cleanPath}`;
+                  }
+                } catch {}
               }
             }
 
-            if (hasPhoto && photoFileExists) {
-              const photoUri = point.photoUri.startsWith('file://') ? point.photoUri : `file://${point.photoUri}`;
+            if (hasPhoto && photoFileExists && photoUri) {
               const fileName = point.photoUri.split('/').pop() || `photo_${point.timestamp}.jpg`;
               formData.append('photo', {
                 uri: photoUri,
                 name: fileName,
                 type: 'image/jpeg',
               });
+              console.log('[SyncService] Uploading photo for point:', point.id, 'fileName:', fileName);
+            } else if (hasPhoto && !photoFileExists) {
+              console.warn('[SyncService] Photo file not found for point:', point.id, 'photoUri:', point.photoUri);
             }
 
-            const result = hasPhoto && photoFileExists
+            const result = hasPhoto && photoFileExists && photoUri
               ? await TrackingService.addLocationWithPhoto(serverSessionId, formData)
               : await TrackingService.addLocationWithFormData(serverSessionId, formData);
 
             if (result.success) {
               await markLocationSynced(point.id);
               totalSynced++;
-              console.log('[SyncService] Synced point:', point.id);
+              console.log('[SyncService] ✅ Successfully synced point:', {
+                id: point.id,
+                sessionLocalId: point.sessionLocalId,
+                source: point.source,
+                lat: Number(point.latitude),
+                lng: Number(point.longitude),
+                hasPhoto: hasPhoto && photoFileExists,
+                isOnline: point.isOnline,
+                serverResponse: result.data ? 'present' : 'none',
+              });
+              
+              // If server returned data with photo URL, log it for debugging
+              if (result.data) {
+                console.log('[SyncService] Server response data:', JSON.stringify(result.data));
+              }
+            } else {
+              console.error('[SyncService] ❌ Upload failed - point NOT marked as synced:', {
+                id: point.id,
+                error: result.error?.message || 'unknown error',
+              });
             }
           } catch (err) {
             console.warn('SyncService: Failed to upload location:', err?.message);
@@ -634,9 +722,33 @@ export const syncPendingLocations = async () => {
           }
         }
 
+        // Calculate total distance for the session and send to server
+        const sessionToEnd = currentSession || session;
+        try {
+          const allLocationsForDistance = await getAllLocationsForSession(sessionToEnd.localSessionId);
+          if (allLocationsForDistance && allLocationsForDistance.length > 1) {
+            let totalDistance = 0;
+            for (let i = 1; i < allLocationsForDistance.length; i++) {
+              const prev = allLocationsForDistance[i - 1];
+              const curr = allLocationsForDistance[i];
+              const prevLat = Number(prev.latitude);
+              const prevLng = Number(prev.longitude);
+              const currLat = Number(curr.latitude);
+              const currLng = Number(curr.longitude);
+              if (Number.isFinite(prevLat) && Number.isFinite(prevLng) && Number.isFinite(currLat) && Number.isFinite(currLng)) {
+                totalDistance += distanceMeters(prevLat, prevLng, currLat, currLng);
+              }
+            }
+            console.log('[SyncService] Calculated total distance:', totalDistance, 'meters');
+            // Note: Distance is calculated locally but server API may not support updating it
+            // The server should calculate distance from uploaded location points
+          }
+        } catch (distErr) {
+          console.warn('[SyncService] Failed to calculate distance:', distErr?.message || String(distErr));
+        }
+
         // End the session on server if it was ended locally
         // Use currentSession to get the latest status
-        const sessionToEnd = currentSession || session;
         if (sessionToEnd.status === 'ended') {
           console.log('[SyncService] Session is ended locally, ending on server...');
           

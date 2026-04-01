@@ -1,4 +1,4 @@
-import { Q } from '@nozbe/watermelondb';
+  import { Q } from '@nozbe/watermelondb';
 import { database } from '../database';
 
 const sessionsCollection = () => database.collections.get('tracking_sessions');
@@ -24,6 +24,14 @@ export const createLocalSession = async (localSessionId, startTime, serverSessio
   return localSessionId;
 };
 
+// Validate location coordinates to prevent invalid data (0,0 or out of range)
+const isValidLocation = (latitude, longitude) =>
+  Number.isFinite(latitude) &&
+  Number.isFinite(longitude) &&
+  Math.abs(latitude) <= 90 &&
+  Math.abs(longitude) <= 180 &&
+  !(latitude === 0 && longitude === 0);
+
 export const saveLocationPoint = async ({
   sessionLocalId,
   latitude,
@@ -42,6 +50,18 @@ export const saveLocationPoint = async ({
   photoUri = null,
   isOnline = false,
 }) => {
+  // CRITICAL: Validate location before saving to prevent (0,0) coordinates
+  if (!isValidLocation(latitude, longitude)) {
+    console.warn('[OfflineLocationStore] Attempted to save invalid location:', {
+      sessionLocalId,
+      latitude,
+      longitude,
+      source,
+      timestamp,
+    });
+    throw new Error('Invalid location coordinates');
+  }
+
   let createdId = null;
   await database.write(async () => {
     const point = await locationsCollection().create((p) => {
@@ -89,7 +109,29 @@ export const getUnsyncedLocations = async (sessionLocalId) => {
       Q.sortBy('timestamp', Q.asc)
     )
     .fetch();
-  return points;
+  
+  // CRITICAL: Map to plain objects to ensure latitude/longitude are proper numbers
+  // This prevents WatermelonDB model issues when building FormData for upload
+  return points.map((p) => ({
+    id: p.id,
+    sessionLocalId: p.sessionLocalId,
+    latitude: Number(p.latitude),
+    longitude: Number(p.longitude),
+    timestamp: p.timestamp,
+    address: p.address,
+    road: p.road,
+    area: p.area,
+    accuracy: p.accuracy,
+    heading: p.heading,
+    speed: p.speed,
+    batteryPercentage: p.batteryPercentage,
+    source: p.source,
+    synced: p.synced,
+    remark: p.remark,
+    amount: p.amount,
+    photoUri: p.photoUri,
+    isOnline: p.isOnline ?? false,
+  }));
 };
 
 export const getUnsyncedSessions = async () => {

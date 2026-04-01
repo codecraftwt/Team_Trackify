@@ -605,6 +605,12 @@ const LocationTrackingScreen = () => {
       return false;
     }
 
+    // Filter out points with 0,0 coordinates (invalid location)
+    if (location.latitude === 0 && location.longitude === 0) {
+      console.warn('sendLocationPoint: Skipping point with 0,0 coordinates');
+      return false;
+    }
+
     let address = 'Unknown Address';
     let road = 'Unknown Road';
     let area = 'Unknown Area';
@@ -933,8 +939,8 @@ const LocationTrackingScreen = () => {
         const geoResult = await geocodeLatLng(initialLocation.latitude, initialLocation.longitude);
         const batteryLevel = await DeviceInfo.getBatteryLevel();
         locationDataForSession = {
-          latitude: initialLocation.latitude,
-          longitude: initialLocation.longitude,
+          latitude: Number(initialLocation.latitude),
+          longitude: Number(initialLocation.longitude),
           accuracy: initialLocation.accuracy,
           heading: initialLocation.bearing,
           speed: initialLocation.speed,
@@ -944,19 +950,32 @@ const LocationTrackingScreen = () => {
           batteryPercentage: Math.round((batteryLevel || 0) * 100),
           isOnline: true,
         };
+        
+        console.log('[LocationTrackingScreen] Built location data for session START:', {
+          lat: locationDataForSession.latitude,
+          lng: locationDataForSession.longitude,
+          isValid: !(locationDataForSession.latitude === 0 && locationDataForSession.longitude === 0),
+        });
       } catch (geoError) {
         console.warn('Failed to get geocode or battery for session start:', geoError?.message);
         locationDataForSession = {
-          latitude: initialLocation.latitude,
-          longitude: initialLocation.longitude,
+          latitude: Number(initialLocation.latitude),
+          longitude: Number(initialLocation.longitude),
           accuracy: initialLocation.accuracy,
           heading: initialLocation.bearing,
           speed: initialLocation.speed,
           isOnline: true,
         };
+        
+        console.log('[LocationTrackingScreen] Built location data (fallback) for session START:', {
+          lat: locationDataForSession.latitude,
+          lng: locationDataForSession.longitude,
+          isValid: !(locationDataForSession.latitude === 0 && locationDataForSession.longitude === 0),
+        });
       }
 
       // STEP 6: Start the tracking session with location data
+      console.log('[LocationTrackingScreen] Calling startSessionOfflineFirst with photo and location:', locationDataForSession);
       const started = await TrackingService.startSessionOfflineFirst(startPhotoFile, locationDataForSession);
       // console.log('Start tracking response:', started);
       const sessionId = started?.sessionId;
@@ -987,8 +1006,9 @@ const LocationTrackingScreen = () => {
         }),
       );
 
-      // STEP 7: Send the initial location point
-      await sendLocationPoint(initialLocation, 'start');
+      // STEP 7: The initial location point with "start" source is already saved by TrackingService
+      // when the session was created (both online and offline). No need to send it again.
+      // console.log('[LocationTrackingScreen] Initial start location already saved by TrackingService');
 
       // STEP 8: Start foreground services and timers
       await startNativeForegroundService();

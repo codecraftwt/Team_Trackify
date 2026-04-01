@@ -396,6 +396,14 @@ const TRACKING_BASE = 'api/Tracking';
 
 const isLocalSessionId = (id) => id && String(id).startsWith('local_');
 
+// Validate location coordinates to prevent invalid data
+const isValidLocation = (latitude, longitude) =>
+  Number.isFinite(latitude) &&
+  Number.isFinite(longitude) &&
+  Math.abs(latitude) <= 90 &&
+  Math.abs(longitude) <= 180 &&
+  !(latitude === 0 && longitude === 0);
+
 const buildPhotoFormData = (photoFile, locationData = null) => {
   const fd = new FormData();
   if (!photoFile?.uri) return fd;
@@ -487,6 +495,21 @@ export const createSessionDirectly = async () => {
 };
 
 export const startSessionOfflineFirst = async (photoFile, locationData = null) => {
+  console.log('[TrackingService] startSessionOfflineFirst called with:', {
+    hasPhoto: !!photoFile?.uri,
+    locationData: locationData ? {
+      lat: locationData.latitude,
+      lng: locationData.longitude,
+      isOnline: locationData.isOnline,
+    } : null,
+  });
+  
+  // Prevent starting a session with invalid location data (0,0)
+  if (!locationData || (locationData.latitude === 0 && locationData.longitude === 0)) {
+    console.error('[TrackingService] BLOCKED: Invalid location data (0,0) or missing locationData');
+    return { error: 'Invalid location data. Please wait for a valid GPS signal.' };
+  }
+
   try {
     if (!photoFile?.uri) {
       throw new Error('Photo is required to start tracking');
@@ -500,17 +523,118 @@ export const startSessionOfflineFirst = async (photoFile, locationData = null) =
     const data = response?.data;
     const sessionId = data?.sessionId;
     const startTime = data?.startTime ? new Date(data.startTime).getTime() : Date.now();
+    
+    console.log('[TrackingService] API SUCCESS - Session created:', {
+      sessionId,
+      startTime,
+      isOnlineSession: true,
+    });
+    
     if (sessionId) {
       await createLocalSession(sessionId, startTime, sessionId, photoFile.uri);
+      
+      // Save the initial location point with "start" source for online sessions
+      const timestamp = locationData.timestamp ?? Date.now();
+      const locationPayload = {
+        sessionLocalId: sessionId,
+        latitude: Number(locationData.latitude),  // Explicit conversion
+        longitude: Number(locationData.longitude),
+        timestamp,
+        address: locationData.address ?? 'Unknown Address',
+        road: locationData.road ?? 'Unknown Road',
+        area: locationData.area ?? 'Unknown Area',
+        accuracy: locationData.accuracy != null ? Number(locationData.accuracy) : null,
+        heading: locationData.heading != null ? Number(locationData.heading) : null,
+        speed: locationData.speed != null ? Number(locationData.speed) : null,
+        batteryPercentage: locationData.batteryPercentage != null ? Number(locationData.batteryPercentage) : null,
+        source: 'start',
+        remark: null,
+        amount: null,
+        photoUri: photoFile.uri,
+        isOnline: locationData.isOnline ?? true,
+      };
+      
+      console.log('[TrackingService] SAVING location point to DB (online session):', {
+        sessionLocalId: sessionId,
+        lat: locationPayload.latitude,
+        lng: locationPayload.longitude,
+        source: locationPayload.source,
+        isOnline: locationPayload.isOnline,
+        hasPhoto: !!locationPayload.photoUri,
+      });
+      
+      await saveLocationPoint(locationPayload);
+      
+      console.log('[TrackingService] ✅ Location saved successfully for online session:', {
+        sessionId,
+        lat: locationPayload.latitude,
+        lng: locationPayload.longitude,
+      });
     }
     return data;
   } catch (error) {
-    console.warn('Start session failed (offline?), creating local session:', error?.message);
+    console.warn('[TrackingService] API FAILED - Creating offline session:', error?.message);
     const localId = generateLocalSessionId();
     const startTime = Date.now();
     // Store the punch-in photo URI for later sync
     const punchInPhotoUri = photoFile?.uri || null;
     await createLocalSession(localId, startTime, null, punchInPhotoUri);
+    
+    console.log('[TrackingService] Offline session created:', {
+      localId,
+      hasLocationData: !!locationData,
+      lat: locationData?.latitude,
+      lng: locationData?.longitude,
+    });
+    
+    // CRITICAL: Save the initial location point with "start" source even for offline sessions
+    // This ensures the first valid location is captured with the photo
+    if (locationData && isValidLocation(locationData.latitude, locationData.longitude)) {
+      const timestamp = locationData.timestamp ?? Date.now();
+      const locationPayload = {
+        sessionLocalId: localId,
+        latitude: Number(locationData.latitude),  // Explicit conversion to number
+        longitude: Number(locationData.longitude),
+        timestamp,
+        address: locationData.address ?? 'Unknown Address',
+        road: locationData.road ?? 'Unknown Road',
+        area: locationData.area ?? 'Unknown Area',
+        accuracy: locationData.accuracy != null ? Number(locationData.accuracy) : null,
+        heading: locationData.heading != null ? Number(locationData.heading) : null,
+        speed: locationData.speed != null ? Number(locationData.speed) : null,
+        batteryPercentage: locationData.batteryPercentage != null ? Number(locationData.batteryPercentage) : null,
+        source: 'start',
+        remark: null,
+        amount: null,
+        photoUri: punchInPhotoUri,
+        isOnline: false,
+      };
+      
+      console.log('[TrackingService] SAVING location point to DB (offline session):', {
+        sessionLocalId: localId,
+        lat: locationPayload.latitude,
+        lng: locationPayload.longitude,
+        source: locationPayload.source,
+        isOnline: locationPayload.isOnline,
+        hasPhoto: !!locationPayload.photoUri,
+      });
+      
+      await saveLocationPoint(locationPayload);
+      
+      console.log('[TrackingService] ✅ Location saved successfully for offline session:', {
+        localId,
+        lat: locationPayload.latitude,
+        lng: locationPayload.longitude,
+      });
+    } else {
+      console.error('[TrackingService] ❌ CRITICAL: Cannot save location - invalid coordinates!', {
+        hasLocationData: !!locationData,
+        latitude: locationData?.latitude,
+        longitude: locationData?.longitude,
+        isValid: locationData ? isValidLocation(locationData.latitude, locationData.longitude) : false,
+      });
+    }
+    
     return { sessionId: localId, startTime: new Date(startTime).toISOString(), isOffline: true };
   }
 };
@@ -590,7 +714,8 @@ export const addLocationWithFormData = async (sessionId, formData) => {
     );
     
     // console.log(`Location sent successfully to session ${sessionId}, status: ${response.status}`);
-    return { success: true, status: response.status };
+    // Return server response data if available (might contain photo URL)
+    return { success: true, status: response.status, data: response?.data };
   } catch (error) {
     // console.error('Failed to send location:', error);
     return { success: false, error };
@@ -611,7 +736,8 @@ export const addLocationWithPhoto = async (sessionId, formData) => {
       }
     );
     // console.log('Photo with location sent successfully');
-    return { success: true, status: response.status };
+    // Return server response data if available (might contain photo URL)
+    return { success: true, status: response.status, data: response?.data };
   } catch (error) {
     console.error('Failed to send photo with location:', error);
     return { success: false, error };
@@ -913,4 +1039,3 @@ export const getUserTrackingDates = async (userId) => {
     return [];
   }
 };
-

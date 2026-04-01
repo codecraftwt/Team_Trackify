@@ -219,6 +219,11 @@ const TrackingSessionDetailScreen = () => {
 
             if (key) usedLocalKeys.add(key);
 
+            // Preserve local photoUri if server doesn't have photoUrl
+            // This ensures photos are displayed correctly after sync
+            const localPhotoUri = match.photoUri || match.photo || match.photoUrl || match.photoPath;
+            const serverPhotoUrl = serverLoc.photoUrl || serverLoc.photo || serverLoc.photoUri || serverLoc.photoPath;
+            
             return {
               ...serverLoc, // preserve `photo`, `photoUrl`, etc.
               latitude: match.latitude,
@@ -234,7 +239,11 @@ const TrackingSessionDetailScreen = () => {
               source: match.source ?? serverLoc.source,
               remark: match.remark ?? serverLoc.remark,
               amount: match.amount ?? serverLoc.amount,
-              photoUri: match.photoUri ?? serverLoc.photoUri,
+              // Prioritize local photoUri if server doesn't have photoUrl
+              photoUri: localPhotoUri || serverLoc.photoUri,
+              photoUrl: serverPhotoUrl || localPhotoUri,
+              photo: serverLoc.photo || localPhotoUri,
+              photoPath: serverLoc.photoPath || localPhotoUri,
               isOnline: match.isOnline ?? serverLoc.isOnline,
             };
           });
@@ -244,6 +253,8 @@ const TrackingSessionDetailScreen = () => {
           for (const p of localLocations) {
             const key = makeKey(p);
             if (!key || usedLocalKeys.has(key)) continue;
+            // Preserve all photo fields for local-only points
+            const localPhotoUri = p.photoUri || p.photo || p.photoUrl || p.photoPath;
             merged.push({
               id: p.id,
               latitude: p.latitude,
@@ -259,7 +270,10 @@ const TrackingSessionDetailScreen = () => {
               source: p.source,
               remark: p.remark,
               amount: p.amount,
-              photoUri: p.photoUri,
+              photoUri: localPhotoUri,
+              photoUrl: localPhotoUri,
+              photo: localPhotoUri,
+              photoPath: localPhotoUri,
               isOnline: p.isOnline ?? false,
             });
           }
@@ -347,12 +361,14 @@ const TrackingSessionDetailScreen = () => {
   const hasPhotoInStart = startLocation?.photo || startLocation?.photoUrl || startLocation?.photoUri || startLocation?.photoPath;
   if (!hasPhotoInStart && startLocationWithPhoto && startLocationWithPhoto !== startLocation) {
     // Use the photo from the photo location but keep start location's coordinates/timestamp
+    // Preserve all photo fields to ensure consistency
+    const photoUri = startLocationWithPhoto.photoUri || startLocationWithPhoto.photo || startLocationWithPhoto.photoUrl || startLocationWithPhoto.photoPath;
     startLocation = {
       ...startLocation,
-      photo: startLocationWithPhoto.photo,
-      photoUrl: startLocationWithPhoto.photoUrl,
-      photoUri: startLocationWithPhoto.photoUri,
-      photoPath: startLocationWithPhoto.photoPath,
+      photo: photoUri,
+      photoUrl: photoUri,
+      photoUri: photoUri,
+      photoPath: photoUri,
     };
   }
 
@@ -425,12 +441,15 @@ const TrackingSessionDetailScreen = () => {
   // use that photo for the end marker
   const hasPhotoInEnd = finalEndLocation?.photo || finalEndLocation?.photoUrl || finalEndLocation?.photoUri || finalEndLocation?.photoPath;
   if (!hasPhotoInEnd && endLocationWithPhoto && endLocationWithPhoto !== startLocation) {
+    // Use the photo from the photo location but keep end location's coordinates/timestamp
+    // Preserve all photo fields to ensure consistency
+    const photoUri = endLocationWithPhoto.photoUri || endLocationWithPhoto.photo || endLocationWithPhoto.photoUrl || endLocationWithPhoto.photoPath;
     finalEndLocation = {
       ...finalEndLocation,
-      photo: endLocationWithPhoto.photo,
-      photoUrl: endLocationWithPhoto.photoUrl,
-      photoUri: endLocationWithPhoto.photoUri,
-      photoPath: endLocationWithPhoto.photoPath,
+      photo: photoUri,
+      photoUrl: photoUri,
+      photoUri: photoUri,
+      photoPath: photoUri,
     };
   }
 
