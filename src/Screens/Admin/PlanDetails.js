@@ -23,7 +23,9 @@ import {
   getUserCustomPlan,
   checkCustomPlanPurchaseEligibility,
   getAllCoupons,
-  getCouponById
+  getCouponById,
+  validateCouponsForPlan,
+  validateCoupon
 } from '../../services/PlansService';
 import RazorpayCheckout from 'react-native-razorpay';
 import CustomHeader from '../../Component/CustomHeader';
@@ -55,6 +57,9 @@ export default function PlanDetails({ route, navigation }) {
   const [selectedCoupon, setSelectedCoupon] = useState(null);
   const [couponCode, setCouponCode] = useState('');
   const [showCoupons, setShowCoupons] = useState(false);
+  const [validatedCoupon, setValidatedCoupon] = useState(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [finalAmount, setFinalAmount] = useState(null);
 
   // Check if buy button should be disabled
   const isAddOn = plan ? isAddOnPlan(plan.name) : false;
@@ -76,7 +81,7 @@ export default function PlanDetails({ route, navigation }) {
     }
 
     fetchSubscriptionStatus();
-    fetchCoupons();
+    // Don't fetch coupons yet - wait for plan to be loaded
 
     // Verify Razorpay availability
     const timer = setTimeout(() => {
@@ -89,6 +94,13 @@ export default function PlanDetails({ route, navigation }) {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Fetch coupons after plan is loaded
+  useEffect(() => {
+    if (plan) {
+      fetchCoupons();
+    }
+  }, [plan]);
 
   // Check if custom plan has been purchased already
   const checkIfCustomPlanPurchased = async () => {
@@ -132,13 +144,18 @@ export default function PlanDetails({ route, navigation }) {
     }
   };
 
-  // Fetch all active coupons
+  // Fetch all active coupons and filter by plan price
   const fetchCoupons = async () => {
     try {
       setLoadingCoupons(true);
       const response = await getAllCoupons({ status: 'active', limit: 50 });
       if (response.success && response.data) {
-        setCoupons(response.data);
+        console.log('Plan price:', plan?.price);
+        console.log('All fetched coupons:', response.data);
+        // Filter coupons based on plan price and minAmount requirement
+        const validCoupons = validateCouponsForPlan(response.data, plan?.price || 0);
+        console.log('Valid coupons after filtering:', validCoupons);
+        setCoupons(validCoupons);
       }
     } catch (error) {
       console.error('Error fetching coupons:', error);
@@ -167,6 +184,40 @@ export default function PlanDetails({ route, navigation }) {
   const handleClearCoupon = () => {
     setSelectedCoupon(null);
     setCouponCode('');
+    setValidatedCoupon(null);
+    setFinalAmount(null);
+  };
+
+  // Handle applying a coupon from the list
+  const handleApplyCoupon = async (coupon) => {
+    try {
+      setValidatingCoupon(true);
+      console.log('Applying coupon:', coupon.code, 'for amount:', plan.price);
+      
+      const response = await validateCoupon(coupon.code, plan.price);
+      
+      if (response.success && response.data) {
+        setValidatedCoupon(response.data);
+        setFinalAmount(response.data.finalAmount);
+        setSelectedCoupon(coupon);
+        setCouponCode(coupon.code);
+        setShowCoupons(false);
+        
+        Alert.alert(
+          'Coupon Applied!',
+          `Discount: ₹${response.data.discountAmount}\nFinal Amount: ₹${response.data.finalAmount}`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error applying coupon:', error);
+      Alert.alert(
+        'Coupon Validation Failed',
+        error.message || 'This coupon cannot be applied. Please try another coupon.'
+      );
+    } finally {
+      setValidatingCoupon(false);
+    }
   };
 
   const handleBuyPlan = async () => {
@@ -217,13 +268,20 @@ export default function PlanDetails({ route, navigation }) {
 
       const { orderId, amount, paymentId, description } = orderResponse.data;
 
+      // Use finalAmount if coupon is validated, otherwise use original amount
+      const amountToPay = finalAmount ? finalAmount.toString() : amount.toString();
+      
+      console.log('Order amount:', amount, 'Final amount to pay:', amountToPay);
+
       // Open Razorpay Checkout
       const options = {
-        description: description || `Purchase ${plan.name}`,
+        description: validatedCoupon 
+          ? `${description || `Purchase ${plan.name}`} - Coupon: ${validatedCoupon.code} (Saved ₹${validatedCoupon.discountAmount})`
+          : description || `Purchase ${plan.name}`,
         image: 'https://i.imgur.com/3g7nmJC.png',
         currency: 'INR',
         key: RAZORPAY_KEY,
-        amount: amount.toString(),
+        amount: amountToPay, // Use discounted amount
         order_id: orderId,
         name: 'Team Trackify',
         prefill: {
@@ -264,7 +322,7 @@ export default function PlanDetails({ route, navigation }) {
 
         Alert.alert(
           'Payment Successful!',
-          'Your plan has been purchased successfully.',
+          `You saved ₹${validatedCoupon?.discountAmount || 0} with coupon ${validatedCoupon?.code || 'N/A'}!\nYour plan has been purchased successfully.`,
           [
             {
               text: 'OK',
@@ -542,6 +600,16 @@ export default function PlanDetails({ route, navigation }) {
             <View style={styles.sectionHeader}>
               <Icon name="local-offer" size={22} color="#4A90E2" />
               <Text style={styles.sectionTitle}>Apply Coupon</Text>
+              {coupons.length > 0 && validatedCoupon ? (
+                <View style={[styles.couponCountBadge, styles.appliedCouponBadge]}>
+                  <Icon name="check-circle" size={12} color="#fff" />
+                  <Text style={styles.couponCountText}> Applied</Text>
+                </View>
+              ) : coupons.length > 0 ? (
+                <View style={styles.couponCountBadge}>
+                  <Text style={styles.couponCountText}>{coupons.length} Available</Text>
+                </View>
+              ) : null}
             </View>
             
             {selectedCoupon ? (
@@ -551,11 +619,19 @@ export default function PlanDetails({ route, navigation }) {
                     <Text style={styles.couponCodeText}>{selectedCoupon.code}</Text>
                   </View>
                   <Text style={styles.couponDescription}>{selectedCoupon.description}</Text>
-                  <Text style={styles.couponDiscount}>
-                    {selectedCoupon.discountType === 'percentage' 
-                      ? `${selectedCoupon.discountValue}% OFF` 
-                      : `₹${selectedCoupon.discountValue} OFF`}
-                  </Text>
+                  {validatedCoupon && (
+                    <View style={styles.discountDetailsContainer}>
+                      <Text style={styles.discountDetailText}>
+                        Discount: ₹{validatedCoupon.discountAmount}
+                      </Text>
+                      <Text style={styles.finalAmountText}>
+                        Final Amount: ₹{validatedCoupon.finalAmount}
+                      </Text>
+                      <Text style={styles.originalAmountText}>
+                        Original: ₹{validatedCoupon.originalAmount}
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <TouchableOpacity 
                   style={styles.removeCouponButton}
@@ -597,8 +673,9 @@ export default function PlanDetails({ route, navigation }) {
                   coupons.map((coupon) => (
                     <TouchableOpacity
                       key={coupon._id}
-                      style={styles.couponCard}
-                      onPress={() => handleSelectCoupon(coupon._id)}
+                      style={[styles.couponCard, validatingCoupon && styles.couponCardDisabled]}
+                      onPress={() => handleApplyCoupon(coupon)}
+                      disabled={validatingCoupon}
                     >
                       <View style={styles.couponCardLeft}>
                         <View style={styles.couponCodeBadge}>
@@ -607,14 +684,26 @@ export default function PlanDetails({ route, navigation }) {
                         <Text style={styles.couponDescription} numberOfLines={1}>
                           {coupon.description}
                         </Text>
-                      </View>
-                      <View style={styles.couponCardRight}>
                         <Text style={styles.couponDiscount}>
                           {coupon.discountType === 'percentage' 
                             ? `${coupon.discountValue}% OFF` 
                             : `₹${coupon.discountValue} OFF`}
                         </Text>
-                        <Icon name="chevron-right" size={20} color="#4A90E2" />
+                        <Text style={styles.minAmountText}>
+                          Min. purchase: ₹{coupon.minAmount}
+                        </Text>
+                      </View>
+                      <View style={styles.couponCardRight}>
+                        {validatingCoupon ? (
+                          <ActivityIndicator size="small" color="#4A90E2" />
+                        ) : (
+                          <>
+                            <View style={styles.applyButton}>
+                              <Text style={styles.applyButtonText}>Apply</Text>
+                            </View>
+                            <Icon name="chevron-right" size={20} color="#4A90E2" />
+                          </>
+                        )}
                       </View>
                     </TouchableOpacity>
                   ))
@@ -853,6 +942,71 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  couponCountBadge: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  couponCountText: {
+    color: '#fff',
+    fontSize: 11,
+    fontFamily: 'Rubik-Medium',
+  },
+  appliedCouponBadge: {
+    backgroundColor: '#27AE60',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  discountDetailsContainer: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  discountDetailText: {
+    fontSize: 13,
+    fontFamily: 'Rubik-Medium',
+    color: '#27AE60',
+    marginBottom: 4,
+  },
+  finalAmountText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#27AE60',
+    marginBottom: 2,
+  },
+  originalAmountText: {
+    fontSize: 12,
+    fontFamily: 'Rubik-Regular',
+    color: '#999',
+    textDecorationLine: 'line-through',
+  },
+  minAmountText: {
+    fontSize: 11,
+    fontFamily: 'Rubik-Regular',
+    color: '#666',
+    marginTop: 4,
+  },
+  applyButton: {
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  applyButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'Rubik-Medium',
+  },
+  couponCardDisabled: {
+    opacity: 0.5,
   },
   sectionTitle: {
     fontSize: 18,

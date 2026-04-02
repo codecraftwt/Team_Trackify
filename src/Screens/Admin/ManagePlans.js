@@ -243,20 +243,21 @@ export default function ManagePlans() {
     let disableReason = '';
 
     if (!loadingSubscription) {
-      // Check if user has active base plan OR active custom plan
-      const hasActiveBaseOrCustomPlan = subscriptionStatus.hasActivePlan || (customPlan !== null);
-      const hasNoBaseOrCustomPlan = subscriptionStatus.hasNoPlan && customPlan === null;
-      const hasExpiredBasePlanAndNoCustomPlan = subscriptionStatus.hasExpiredPlan && customPlan === null;
+      // Check if user has an ACTIVE base plan OR ACTIVE custom plan
+      // Note: subscriptionStatus.hasActivePlan includes both active base plans and active custom plans
+      const hasActiveBaseOrCustomPlan = subscriptionStatus.hasActivePlan;
+      
+      // If user has NO active plan (either never had, or expired), they can purchase base/custom plans
+      const hasNoActivePlan = !subscriptionStatus.hasActivePlan;
 
       if (hasActiveBaseOrCustomPlan && !isAddOn) {
+        // User has active base/custom plan - disable base plans, enable add-ons
         isDisabled = true;
         disableReason = 'Active Plan';
-      } else if (hasNoBaseOrCustomPlan && isAddOn) {
+      } else if (hasNoActivePlan && isAddOn) {
+        // User has no active plan (no plan or expired) - disable add-ons, enable base plans
         isDisabled = true;
-        disableReason = 'Needs Base Plan';
-      } else if (hasExpiredBasePlanAndNoCustomPlan && isAddOn) {
-        isDisabled = true;
-        disableReason = 'Renew First';
+        disableReason = subscriptionStatus.hasExpiredPlan ? 'Renew First' : 'Needs Base Plan';
       }
     }
 
@@ -478,7 +479,7 @@ export default function ManagePlans() {
                   if (subscriptionStatus.hasActivePlan) {
                     Alert.alert(
                       'Plan Unavailable',
-                      'You already have an active base plan. You can purchase add-ons.'
+                      'You already have an active base or custom plan. You can purchase add-ons.'
                     );
                   } else {
                     navigation.navigate('PlanDetails', {
@@ -532,7 +533,7 @@ export default function ManagePlans() {
                         if (subscriptionStatus.hasActivePlan) {
                           Alert.alert(
                             'Plan Unavailable',
-                            'You already have an active base plan. You can purchase add-ons.'
+                            'You already have an active base or custom plan. You can purchase add-ons.'
                           );
                         } else {
                           setIsEditingCustomPlan(true);

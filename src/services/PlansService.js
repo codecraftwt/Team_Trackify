@@ -634,7 +634,7 @@ export const getAllCoupons = async (options = {}) => {
         Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` 
       } : {}
     });
-    console.log('Fetched coupons:', response.data);
+    // console.log('Fetched coupons:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error fetching coupons:', {
@@ -689,6 +689,85 @@ export const getCouponById = async (couponId) => {
         throw new Error('Coupon not found');
       }
       throw new Error(error.response.data?.message || 'Failed to fetch coupon');
+    } else if (error.request) {
+      throw new Error('Network error. Please check your connection.');
+    } else {
+      throw new Error(error.message || 'Something went wrong. Please try again.');
+    }
+  }
+};
+
+/**
+ * Validate coupons for a specific plan based on minimum amount requirement
+ * @param {Array} coupons - Array of coupons to validate
+ * @param {number} planPrice - Plan price to validate against
+ * @returns {Array} - Filtered array of valid coupons
+ */
+export const validateCouponsForPlan = (coupons, planPrice) => {
+  if (!coupons || !Array.isArray(coupons)) {
+    return [];
+  }
+  
+  if (!planPrice || planPrice <= 0) {
+    console.log('Invalid plan price:', planPrice);
+    return [];
+  }
+  
+  // Filter coupons where minAmount <= planPrice
+  const validCoupons = coupons.filter((coupon) => {
+    // Check if coupon has minAmount requirement
+    if (coupon.minAmount === undefined || coupon.minAmount === null) {
+      return true; // No minimum amount requirement, coupon is valid
+    }
+    
+    // Validate minAmount against plan price
+    const isValid = coupon.minAmount <= planPrice;
+    console.log(`Coupon ${coupon.code}: minAmount=${coupon.minAmount}, planPrice=${planPrice}, valid=${isValid}`);
+    return isValid;
+  });
+  
+  console.log(`Validated ${validCoupons.length} coupons out of ${coupons.length} for plan price ${planPrice}`);
+  return validCoupons;
+};
+
+/**
+ * Validate a coupon for a specific amount
+ * @param {string} code - Coupon code to validate
+ * @param {number} amount - Amount to validate against
+ * @returns {Promise<Object>} - Validation response with discount details
+ */
+export const validateCoupon = async (code, amount) => {
+  try {
+    if (!code || !amount || amount <= 0) {
+      throw new Error('Coupon code and valid amount are required');
+    }
+
+    // Get auth token
+    let token = await AsyncStorage.getItem('token');
+    if (!token) {
+      token = await AsyncStorage.getItem('authToken');
+    }
+
+    const response = await Api.post('/api/coupon/validate', {
+      code,
+      amount
+    }, {
+      headers: token ? { 
+        Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` 
+      } : {}
+    });
+    
+    console.log('Coupon validation response:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error validating coupon:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+    
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Failed to validate coupon');
     } else if (error.request) {
       throw new Error('Network error. Please check your connection.');
     } else {
