@@ -754,10 +754,15 @@ const formatTime = (iso) => {
 };
 
 /** Handles totalDistance in km (new API) or meters (legacy) */
-const formatDistanceKm = (val) => {
-  if (val == null || val === undefined) return '0.00 km';
-  const n = Number(val);
-  const km = n > 500 ? n / 1000 : n;
+// const formatDistanceKm = (val) => {
+//   if (val == null || val === undefined) return '0.00 km';
+//   const n = Number(val);
+//   const km = n > 500 ? n / 1000 : n;
+//   return `${km.toFixed(2)} km`;
+// };
+const formatDistanceKm = (meters) => {
+  if (meters == null || meters === undefined) return '0.00 km';
+  const km = Number(meters) / 1000;  // always convert meters to km
   return `${km.toFixed(2)} km`;
 };
 
@@ -790,6 +795,7 @@ const SessionItem = ({ item, onPress }) => {
   const start = formatTime(item.startTime);
   const end = isActive ? 'Active' : formatTime(item.endTime);
   const distance = item.totalDistance ?? 0;
+  console.log("distance ===>", distance);
 
   // Use totalUploadedPhotos as delivery stations count
   const deliveryStations = item.totalUploadedPhotos ?? 0;

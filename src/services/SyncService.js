@@ -724,10 +724,11 @@ export const syncPendingLocations = async () => {
 
         // Calculate total distance for the session and send to server
         const sessionToEnd = currentSession || session;
+        let totalDistance = 0; // Declare at higher scope for access in endLocationData
         try {
           const allLocationsForDistance = await getAllLocationsForSession(sessionToEnd.localSessionId);
           if (allLocationsForDistance && allLocationsForDistance.length > 1) {
-            let totalDistance = 0;
+            totalDistance = 0;
             for (let i = 1; i < allLocationsForDistance.length; i++) {
               const prev = allLocationsForDistance[i - 1];
               const curr = allLocationsForDistance[i];
@@ -789,6 +790,7 @@ export const syncPendingLocations = async () => {
                     batteryPercentage: lastNonZero.batteryPercentage ?? null,
                     isOnline: true,
                     remark: 'Tracking ended',
+                    totalDistance: totalDistance, // Add calculated distance
                   };
                 }
               } catch (locErr) {
@@ -817,6 +819,11 @@ export const syncPendingLocations = async () => {
               }
               
               // Use retry helper to end session
+              console.log('[SyncService] Ending session with endLocationData:', {
+                serverSessionId,
+                hasPunchOutPhoto: !!punchOutPhoto,
+                totalDistance: endLocationData?.totalDistance,
+              });
               const endResult = await endSessionOnServerWithRetry(
                 serverSessionId,
                 punchOutPhoto,
@@ -859,6 +866,7 @@ export const syncPendingLocations = async () => {
                     batteryPercentage: lastNonZero.batteryPercentage ?? null,
                     isOnline: true,
                     remark: 'Tracking ended',
+                    totalDistance: totalDistance, // Add calculated distance
                   };
                 }
               } catch (locErr) {
@@ -887,6 +895,11 @@ export const syncPendingLocations = async () => {
               }
               
               // Use retry helper to end session
+              console.log('[SyncService] Ending session with endLocationData (fallback):', {
+                serverSessionId,
+                hasPunchOutPhoto: !!punchOutPhoto,
+                totalDistance: endLocationData?.totalDistance,
+              });
               const endResult = await endSessionOnServerWithRetry(
                 serverSessionId,
                 punchOutPhoto,

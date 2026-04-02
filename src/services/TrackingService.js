@@ -406,12 +406,14 @@ const isValidLocation = (latitude, longitude) =>
 
 const buildPhotoFormData = (photoFile, locationData = null) => {
   const fd = new FormData();
-  if (!photoFile?.uri) return fd;
-  fd.append('photo', {
-    uri: photoFile.uri,
-    name: photoFile.fileName || photoFile.name || `photo_${Date.now()}.jpg`,
-    type: photoFile.type || 'image/jpeg',
-  });
+  // Only append photo if it exists and has a uri
+  if (photoFile?.uri) {
+    fd.append('photo', {
+      uri: photoFile.uri,
+      name: photoFile.fileName || photoFile.name || `photo_${Date.now()}.jpg`,
+      type: photoFile.type || 'image/jpeg',
+    });
+  }
 
   // Add optional body parameters
   if (locationData) {
@@ -450,6 +452,9 @@ const buildPhotoFormData = (photoFile, locationData = null) => {
     }
     if (locationData.isOnline != null) {
       fd.append('isOnline', locationData.isOnline ? 'true' : 'false');
+    }
+    if (locationData.totalDistance != null) {
+      fd.append('totalDistance', String(locationData.totalDistance));
     }
   }
 
@@ -669,14 +674,6 @@ export const addLocationOfflineFirst = async (sessionId, locationData, formData)
     isOnline: actualIsOnline,
   };
   
-  // console.log('Saving location to offline store:', {
-  //   sessionId,
-  //   lat: locationData.latitude?.toFixed(6),
-  //   lng: locationData.longitude?.toFixed(6),
-  //   source: locationData.source,
-  //   timestamp: locationData.timestamp
-  // });
-  
   const pointId = await saveLocationPoint(locationPayload);
   
   if (isLocalSessionId(sessionId)) {
@@ -735,7 +732,6 @@ export const addLocationWithPhoto = async (sessionId, formData) => {
         validateStatus: (status) => status === 204 || status === 200,
       }
     );
-    // console.log('Photo with location sent successfully');
     // Return server response data if available (might contain photo URL)
     return { success: true, status: response.status, data: response?.data };
   } catch (error) {
@@ -839,53 +835,6 @@ export const endSessionOfflineFirst = async (sessionId, photoFile, locationData 
       console.warn('Failed to save punch-out photo:', err?.message);
     }
   }
-  
-  // Save end location point if location data provided (for offline sessions)
-  // if (locationData && isLocalSessionId(sessionId)) {
-  //   try {
-  //     const { saveLocationPoint } = await import('./OfflineLocationStore');
-      
-  //     // Try to geocode the end location
-  //     let address = locationData.address || 'End Location';
-  //     let road = locationData.road || '';
-  //     let area = locationData.area || '';
-      
-  //     try {
-  //       const { geocodeLatLng } = await import('../utils/geocoding');
-  //       const geo = await geocodeLatLng(locationData.latitude, locationData.longitude);
-  //       if (geo) {
-  //         address = geo.address || address;
-  //         road = geo.road || road;
-  //         area = geo.area || area;
-  //       }
-  //     } catch (geoErr) {
-  //       console.log('[TrackingService] Could not geocode end location:', geoErr?.message);
-  //     }
-      
-  //     await saveLocationPoint({
-  //       sessionLocalId: sessionId,
-  //       latitude: locationData.latitude,
-  //       longitude: locationData.longitude,
-  //       timestamp: endTime,
-  //       address: address,
-  //       road: road,
-  //       area: area,
-  //       accuracy: locationData.accuracy || null,
-  //       heading: locationData.heading || null,
-  //       speed: locationData.speed || null,
-  //       batteryPercentage: locationData.batteryPercentage || null,
-  //       source: 'end',  // Mark as end location
-  //       remark: locationData.remark || null,
-  //       amount: locationData.amount || null,
-  //       photoUri: photoFile?.uri || null,
-  //       isOnline: false,
-  //     });
-  //     console.log('[TrackingService] Saved end location point with source=end');
-  //   } catch (err) {
-  //     console.warn('Failed to save end location point:', err?.message);
-  //   }
-  // }
-  
   await endLocalSession(sessionId, endTime);
   if (isLocalSessionId(sessionId)) {
     return { success: true, storedOffline: true };
@@ -1017,9 +966,6 @@ export const getUserTrackingDates = async (userId) => {
     const response = await Api.get(
       `${TRACKING_BASE}/admin/users/${userId}/sessions/dates`
     );
-
-    // console.log('getUserTrackingDates raw response status:', response.status);
-    // console.log('getUserTrackingDates raw response data:', response.data);
 
     const data = response.data;
     if (data?.success && data?.data) {
