@@ -453,7 +453,7 @@ const TrackingSessionDetailScreen = () => {
     };
   }
 
-  const photoLocationsRaw = locations.filter(
+  const photoLocationsRaw = sortedLocationsWithCoords.filter(
     (l) =>
       (l?.photoUrl || l?.photo || l?.photoPath || l?.photoUri) &&
       Number.isFinite(Number(l?.latitude)) &&
@@ -663,6 +663,16 @@ const renderRouteMarkers = (keyPrefix) => (
       seen.add(key);
       out.push(loc);
     }
+
+    // Exclude the final end location from this list if it has a photo, to prevent a duplicate card.
+    const finalEndPhotoUri = finalEndLocation?.photo || finalEndLocation?.photoUrl || finalEndLocation?.photoUri || finalEndLocation?.photoPath;
+    if (finalEndPhotoUri) {
+      return out.filter(loc => {
+        const locPhotoUri = loc.photo || loc.photoUrl || loc.photoUri || loc.photoPath;
+        return locPhotoUri !== finalEndPhotoUri;
+      });
+    }
+
     return out;
   })();
 

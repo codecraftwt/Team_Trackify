@@ -400,7 +400,7 @@ const TrackingHistoryScreen = ({ route }) => {
           <Text style={styles.summaryDistance}>
             {formatDistanceKm(totalDistance)}
           </Text>
-          <Text style={styles.summaryLabel}>Total Trzaveled Distance</Text>
+          <Text style={styles.summaryLabel}>Total Traveled Distance</Text>
         </View>
 
         <FlatList

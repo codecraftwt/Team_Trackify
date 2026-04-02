@@ -802,7 +802,6 @@ const LocationTrackingScreen = () => {
         area: geoResult?.area || null,
         batteryPercentage: Math.round((batteryLevel || 0) * 100),
         isOnline: true,
-        remark: 'Tracking ended',
       };
     } catch (locationError) {
       console.warn('Failed to get location for end session:', locationError?.message);
@@ -813,7 +812,6 @@ const LocationTrackingScreen = () => {
       await AsyncStorage.removeItem(LAST_SESSION_KEY);
 
       // Do NOT sync pending locations when ending - they would add more distance
-      void syncPendingLocations().catch(() => undefined);
 
       await loadSessionLocations(sessionIdToEnd, true);
 
@@ -838,6 +836,7 @@ const LocationTrackingScreen = () => {
         error?.message || 'Tracking stopped, but final sync failed. Data is still stored offline.',
         'warning',
       );
+      // Navigate to detail screen even on failure so user can see offline data
       navigation.navigate('TrackingSessionDetail', { sessionId: sessionIdToEnd });
     } finally {
       punchOutPausedServicesRef.current = false;
